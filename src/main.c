@@ -17,28 +17,19 @@ char *load_file(const char *path) {
 	return contents;
 }
 
-static const char *token_debug_str[] = {
-	"T_IDENT", "T_INT", "T_FLT", "T_STR", "T_CHR", "T_NUL", "T_TRUE", "T_FALSE",
-	"T_COL", "T_SEMI", "T_SET", "T_EQU", "T_ARW", "T_DOT", "T_ASTR", "T_AMPR", "T_RNG", "T_DOLR", "T_COMMA", "T_AT",
-	"T_SUB", "T_ADD",
-	"T_LBRC", "T_RBRC", "T_LBRA", "T_RBRA", "T_LPAR", "T_RPAR", "T_LANG", "T_RANG",
-	"T_RET", "T_MODUL", "T_IMPOR", "T_EXPOR",  "T_STRUC", "T_ENUM", "T_UNION", "T_PRIV", "T_EXTRN", "T_OP",
-	"T_FOR", "T_WHILE", "T_IN", "T_SELF",
-	"T_EOF"
-};
-
 int main(int argc, char *argv[]) {
 	for (int i = 1; i < argc; ++i) {
 		char *file = load_file(argv[i]);
 		lex_setup(file);
-		token_t t;
-		while ((t = lex_next()) != T_EOF) {
-			if (t == T_IDENT || t == T_STR || t == T_CHR || t == T_INT)
-				printf("[%s \"%s\"], ", token_debug_str[t], lex_tstr);
-			else
-				printf("[%s], ", token_debug_str[t]);
-		}
+		// token_t t;
+		// while ((t = lex_next()) != T_EOF) {
+		// 	if (t == T_IDENT || t == T_STR || t == T_CHR || t == T_INT)
+		// 		printf("[%s \"%s\"], ", token_debug_str[t], lex_tstr);
+		// 	else
+		// 		printf("[%s], ", token_debug_str[t]);
+		// }
+		parse();
 		free(file);
-	}	
+	}
 	return 0;
 }
