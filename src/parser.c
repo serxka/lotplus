@@ -6,25 +6,63 @@
 #include "compiler.h"
 
 static token_t token;
-static table_t symbols;
+table_t symbols;
 
 typedef struct sym_kv_s {
 	union {
-		struct sym_kv_func {
-			struct table_t *params;
-			struct table_t *block;
-		} func;
 		struct sym_kv_var {
 			uint64_t type_id;
-		} variable;
+		} var;
+		struct sym_kv_func {
+			table_t block;
+			struct sym_kv_var ret;
+		} func;
 	};
 	enum {
 		SYM_KV_FUNC,
 		SYM_KV_PARAMETER,
 		SYM_KV_VARIABLE,
 		SYM_KV_INNER,
+		SYM_KV_MODULE,
 	} type;
 }sym_kv_t;
+
+
+static inline struct sym_kv_var sym_extract_type(node_t *type) {
+	return (struct sym_kv_var){0};
+}
+
+static sym_kv_t *sym_new_param(node_t *type) {
+	sym_kv_t *param = calloc(1, sizeof(sym_kv_t));
+	if (param == NULL)
+		panic("failed to allocate symbol value");
+	
+	param->type = SYM_KV_PARAMETER;
+	param->var = sym_extract_type(type);
+	
+	return param;
+}
+
+static sym_kv_t *sym_new_func(node_t *ret, table_t block) {
+	sym_kv_t *func = calloc(1, sizeof(sym_kv_t));
+	if (func == NULL)
+		panic("failed to allocate symbol value");
+	
+	func->type = SYM_KV_FUNC;
+	func->func.block = block;
+	func->func.ret = sym_extract_type(ret);
+	
+	return func;
+}
+
+static sym_kv_t *sym_new_module(void) {
+	sym_kv_t *module = calloc(1, sizeof(sym_kv_t));
+	if (module == NULL)
+		panic("failed to allocate symbol value");
+	module->type = SYM_KV_MODULE;
+	
+	return module;
+}
 
 static inline bool match(token_t t) {
 	if (token == t) {
@@ -42,7 +80,7 @@ static inline bool expect(token_t t) {
 		panic("failed to match token, expected %s found %s", token_debug_str[t], token_debug_str[token]);
 }
 
-static node_t *compound_statement(void) {
+static node_t *compound_statement(table_t *local) {
 	expect(T_LBRC);
 
 	expect(T_RBRC);
@@ -59,8 +97,7 @@ static node_t *type(void) {
 static node_t *parameter_declaration(void) {
 	expect(T_IDENT);
 	if (!strcmp(lex_tstr, "void")) {
-		node_t *type = ast_leaf(A_TYPE, (void*)strdup(lex_tstr));
-		return ast_node(A_PARA, NULL, type);
+		return NULL;
 	} else {
 		expect(T_COL);
 		node_t *ident = ast_leaf(A_IDENT, (void*)strdup(lex_tstr));
@@ -68,48 +105,89 @@ static node_t *parameter_declaration(void) {
 	}
 }
 
-static node_t *parameter_list(void) {
+static node_t *parameter_list(table_t *local) {
 	node_t *left = parameter_declaration();
-	if (match(T_COMMA)) {
-		return ast_node(A_LIST, left, parameter_list());
-	} else {
+	if (left == NULL) // we have no parameters
+		return NULL;
+	
+	// Add to our symbol table
+	table_insert(local, left->lh->leaf, sym_new_param(left->rh));
+	if (match(T_COMMA))
+		return ast_node(A_LIST, left, parameter_list(local));
+	else
 		return ast_node(A_LIST, left, NULL);
-	}
 }
 
-static table_t parameters_symbols(node_t *root) {
-	table_t params = table_new();
-	node_t *next = root;
-	do {
-		if (next->lh != NULL) {
-			
-			// table_insert((char*)next->lh->leaf, );
-		}
-	} while((next = root->rh) != NULL && next->op == A_LIST);
-}
-
-static node_t *function_definition(void) {
-	if (match(T_IDENT) && match(T_LPAR)) {
+static node_t *function_definition(table_t *local) {
+	if (match(T_IDENT)) {
 		char *func_name = strdup(lex_tstr);
-		table_t parameters = parameters_symbols(parameter_list());
+		if (!match(T_LPAR)) {
+			free(func_name);
+			return NULL;
+		}
+		
+		table_t block = table_new();
+		
+		/*node_t *parameters = */parameter_list(&block);
+		
 		expect(T_RPAR);
 		expect(T_COL);
-		// node_t *ret = type();
-		// node_t *body = compound_statement();
-	}
+		
+		node_t *ret = type();
+		node_t *body = compound_statement(&block);
 
-	return NULL;
+		sym_kv_t *func = sym_new_func(ret, block);
+		table_insert(local, func_name, func);
+		
+		node_t *func_symb = ast_leaf(A_SYMB, (void*)func_name);
+		return ast_node(A_FN, func_symb, body);
+	} else {
+		return NULL;
+	}
+}
+
+static str_t symbol_path(void) {
+	str_t path = str_empty();
+	if (match(T_DOT)) // absolute path
+		str_push(&path, '.');
+	while (match(T_IDENT)) {
+		str_cat(&path, lex_tstr);
+		if (!match(T_DOT))
+			break;
+		str_push(&path, '.');
+	}
+	return path;
+}
+
+static node_t *module_declaration(table_t *symbols) {
+	if (match(T_MODUL)) {
+		str_t path = symbol_path();
+		expect(T_SEMI);
+		table_insert(symbols, path.d, sym_new_module());
+		return ast_leaf(A_MODULE, path.d);
+	} else {
+		return NULL;
+	}
 }
 
 static node_t *translation_unit(void) {
-	node_t *tree = NULL;
-	for (;;) {
-		if ((tree = function_definition()) != NULL) {
-			
+	node_t *tree, *left = NULL;
+	while (true) {
+		if ((tree = function_definition(&symbols)) != NULL) {
+			goto append;
+		} else if ((tree = module_declaration(&symbols)) != NULL) {
+			goto append;
 		}
-
-		if (match(T_EOF))
-			return tree;
+		
+		expect(T_EOF);
+		return ast_unary(A_UNIT, left);
+		
+		append:
+			if (left == NULL)
+				left = tree;
+			else
+				left = ast_node(A_LIST, left, tree);
+			continue;
 	}
 }
 

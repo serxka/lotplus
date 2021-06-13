@@ -2,3 +2,4 @@
 **/*.d
 lc
 notes/
+ast.dot

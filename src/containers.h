@@ -2,6 +2,7 @@
 #define _CONTAINERS_H_
 
 #include <stddef.h>
+#include <stdbool.h>
 
 #include "enums.h"
 
@@ -47,5 +48,20 @@ table_t table_new(void);
 void table_insert(table_t *t, const char *key, void *value);
 void table_delete(table_t *t, const char *key);
 void *table_get(table_t *t, const char *key);
+void table_iter_reset(table_t *t);
+bool table_next(void);
+
+typedef struct str_s {
+	size_t len;
+	size_t cap;
+	char *d;
+}str_t;
+
+str_t str_new(const char *data);
+str_t str_empty(void);
+void str_cat(str_t *s, const char *data);
+void str_push(str_t *s, char c);
+str_t str_dup(str_t *s);
+void str_free(str_t *s);
 
 #endif // _CONTAINERS_H_

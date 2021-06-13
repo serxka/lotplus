@@ -22,7 +22,7 @@ typedef enum ast_op_e {
 	// Nodes
 	A_UNIT = 0, A_FN, A_PARA, A_LIST,
 	// Leafs
-	A_IDENT = 64, A_TYPE,
+	A_IDENT = 64 , A_TYPE, A_SYMB, A_MODULE,
 }ast_op_t;
 
 static const char *token_debug_str[] __attribute__((used)) = {
@@ -33,6 +33,11 @@ static const char *token_debug_str[] __attribute__((used)) = {
 	"T_RET", "T_MODUL", "T_IMPOR", "T_EXPOR",  "T_STRUC", "T_ENUM", "T_UNION", "T_PRIV", "T_EXTRN", "T_OP",
 	"T_FOR", "T_WHILE", "T_IN", "T_SELF",
 	"T_EOF"
+};
+
+static const char *ast_op_debug_str[] __attribute__((used)) = {
+	[0] = "translation\nunit", "fn", "parameter", "list",
+	[64] = "identifier", "type", "symbol", "module",
 };
 
 #endif // _ENUMS_H_

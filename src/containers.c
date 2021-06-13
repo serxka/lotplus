@@ -137,7 +137,7 @@ static size_t table_get_free(table_t *t) {
 	// if not found allocate new space
 	size_t new_cap = t->cap + 16;
 	key_value_t *new_data = calloc(new_cap, sizeof(key_value_t)); // calloc so we know all empty fields are null
-	if (t->data == NULL)
+	if (new_data == NULL)
 		panic("failed to realloc table");
 	memcpy(new_data, t->data, t->cap); // copy over old data to new area
 	free(t->data);
@@ -145,4 +145,78 @@ static size_t table_get_free(table_t *t) {
 	t->cap = new_cap;
 	
 	return table_get_free(t);
+}
+
+static struct table_iter {
+	table_t *t;
+	size_t cur;
+}t_iter;
+
+void table_iter_reset(table_t *t) {
+	t_iter.t = t;
+	t_iter.cur = 0;
+}
+
+bool table_next(void) {
+	if (t_iter.cur >= t_iter.t->cap) {
+		return false;
+	} else {
+		if (t_iter.t->data[t_iter.cur++].key != NULL)
+			return true;
+		else
+			return table_next();
+	}
+}
+
+static void str_grow(str_t *s, size_t amt);
+
+str_t str_new(const char *data) {
+	size_t len = strlen(data);
+	char *str = (char*)calloc(len + 1, sizeof(char));
+	if (str == NULL)
+		panic("failed to allocate string");
+	memcpy(str, data, len + 1);
+	return (str_t){.len = len, .cap = len, .d = str};
+}
+
+str_t str_empty(void) {
+	return (str_t){0};
+}
+
+void str_cat(str_t *s, const char *data) {
+	size_t cat_len = strlen(data);
+	if (s->len + cat_len > s->cap)
+		str_grow(s, cat_len - (s->cap - s->len));
+	memcpy(s->d + s->len, data, cat_len);
+	s->len += cat_len;
+	s->d[s->len] = 0;
+}
+
+void str_push(str_t *s, char c) {
+	if (s->len >= s->cap)
+		str_grow(s, 32);
+	s->d[s->len++] = c;
+	s->d[s->len] = 0;
+}
+
+str_t str_dup(str_t *s) {
+	char *str = (char*)calloc(s->len + 1, sizeof(char));
+	if (str == NULL)
+		panic("failed to allocate string");
+	memcpy(str, s->d, s->len);
+	return (str_t){.len = s->len, .cap = s->len, .d = str};
+}
+
+void str_free(str_t *s) {
+	free(s->d);
+	memset(s, 0, sizeof(str_t));
+}
+
+static void str_grow(str_t *s, size_t amt) {
+	size_t new_cap = s->cap + amt;
+	char *str = realloc(s->d, new_cap * sizeof(char) + 1);
+	if (str == NULL)
+		panic("failed to reallocate string");
+	s->cap = new_cap;
+	s->d = str;
 }
