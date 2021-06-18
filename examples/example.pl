@@ -12,14 +12,14 @@ main(void): void {
 	for (i in 0..points.len) {
 		point: = points[i];
 		std.println("point[%ld]: (%d, %d)", i, point->x, point->y);
-	}
-}
+	};
+};
 
 struct Vec: {
-	data priv: @$T,
+	data priv: *$T,
 	len: umach,
 	cap priv: umach,;
-	
+
 	STARTING_CAP: umach = 4;
 	
 	new(void): self {
@@ -30,13 +30,13 @@ struct Vec: {
 			.data = data,
 			.len = 0,
 			.cap = STARTING_CAP,
-		}
+		};
 	};
 	
-	push(@self, item: @$T): void {
+	push(@self, item: $T): void {
 		if (self->len == cap->cap)
 			self->grow();
-		self->data[self->len] = @<item;
+		self->data[self->len] = item;
 		self->len += 1;
 	};
 	
@@ -53,12 +53,12 @@ struct Vec: {
 			ret self->data[self->len - 1];
 	};
 	
-	idx(@self, idx: umach): @$T {
+	idx(@self, idx: umach): *$T {
 		if (self->len < idx)
 			ret self->data + idx;
 		else
 			ret null;
-	}
+	};
 	
 	grow(@self) private: void {
 		new_size: = self->cap * 2;
@@ -70,13 +70,13 @@ struct Vec: {
 	};
 	
 	operator[](@self, idx: umach): @$T {
-		if (@cfg(debug) == true) {
+		if ($cfg(debug) == true) {
 			if (idx >= self->len)
-				std.panic("tried to index at %% where len was %%", idx, self->len);
+				std.panic("tried to index at %ld where len was %ld", idx, self->len);
 		}
 		
 		ret self->data + idx;
-	}
+	};
 	
 	_destruct(@self): void {
 		alloc.free(self->data);
@@ -98,12 +98,12 @@ struct Vec2: {
 		ret {.x = 0, .y = 0};
 	};
 	
-	dot(*self, rhs: *self): $T {
+	dot(@self, rhs: @self): $T {
 		ret self->x * rhs->x +
 		    self->y * rhs->y;
 	};
 	
-	operator+(lhs: *self, rhs: *self): self {
+	operator+(lhs: @self, rhs: @self): self {
 		ret {
 			.x = lhs->x + rhs->x,
 			.y = lhs->y + rhs->y,

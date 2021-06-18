@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "enums.h"
 #include "containers.h"
 #include "compiler.h"
 
@@ -168,6 +167,8 @@ bool table_next(void) {
 	}
 }
 
+#define IS_FAT_STR(s) (s->len > s->cap)
+
 static void str_grow(str_t *s, size_t amt);
 
 str_t str_new(const char *data) {
@@ -179,6 +180,18 @@ str_t str_new(const char *data) {
 	return (str_t){.len = len, .cap = len, .d = str};
 }
 
+str_t str_from(const char *data, size_t len) {
+	char *str = (char*)calloc(len + 1, sizeof(char));
+	if (str == NULL)
+		panic("failed to allocate string");
+	memcpy(str, data, len + 1);
+	return (str_t){.len = len, .cap = len, .d = str};
+}
+
+str_t str_fat(const char *data, size_t len) {
+	return (str_t){.len = len, .cap = 0, .d = (char*)data};
+}
+
 str_t str_empty(void) {
 	return (str_t){0};
 }
@@ -186,7 +199,7 @@ str_t str_empty(void) {
 void str_cat(str_t *s, const char *data) {
 	size_t cat_len = strlen(data);
 	if (s->len + cat_len > s->cap)
-		str_grow(s, cat_len - (s->cap - s->len));
+		str_grow(s, cat_len);
 	memcpy(s->d + s->len, data, cat_len);
 	s->len += cat_len;
 	s->d[s->len] = 0;
@@ -207,12 +220,22 @@ str_t str_dup(str_t *s) {
 	return (str_t){.len = s->len, .cap = s->len, .d = str};
 }
 
+str_t str_promote(str_t *s) {
+	if (!IS_FAT_STR(s))
+		panic("tried to promote a string to heap when it already was");
+	return str_from(s->d, s->len);
+}
+
 void str_free(str_t *s) {
-	free(s->d);
+	if (s->len <= s->cap)
+		free(s->d);
 	memset(s, 0, sizeof(str_t));
 }
 
 static void str_grow(str_t *s, size_t amt) {
+	if (IS_FAT_STR(s))
+		*s = str_promote(s);
+
 	size_t new_cap = s->cap + amt;
 	char *str = realloc(s->d, new_cap * sizeof(char) + 1);
 	if (str == NULL)
