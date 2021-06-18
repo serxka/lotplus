@@ -20,9 +20,9 @@ typedef enum {
 
 typedef enum ast_op_e {
 	// Nodes
-	A_UNIT = 0, A_FN, A_PARA, A_LIST,
+	A_UNIT = 0, A_FN, A_PARA, A_LIST, A_BLOCK,
 	// Leafs
-	A_IDENT = 64 , A_TYPE, A_SYMB, A_MODULE,
+	A_IDENT = 64 , A_TYPE, A_SYMB, A_MODULE, A_STRLIT, A_INTLIT,
 }ast_op_t;
 
 static const char *token_debug_str[] __attribute__((used)) = {
@@ -36,8 +36,8 @@ static const char *token_debug_str[] __attribute__((used)) = {
 };
 
 static const char *ast_op_debug_str[] __attribute__((used)) = {
-	[0] = "translation\nunit", "fn", "parameter", "list",
-	[64] = "identifier", "type", "symbol", "module",
+	[0] = "translation\nunit", "fn", "parameter", "list", "block",
+	[64] = "identifier", "type", "symbol", "module", "str literal", "int literal"
 };
 
 #endif // _ENUMS_H_

@@ -80,11 +80,64 @@ static inline bool expect(token_t t) {
 		panic("failed to match token, expected %s found %s", token_debug_str[t], token_debug_str[token]);
 }
 
+static node_t *conditional_statement(table_t *local) {
+	return (node_t*)NULL;
+}
+
+static node_t *expression(table_t *local);
+
+static node_t *base_expression(void) {
+	if (match(T_IDENT))
+		return ast_leaf(A_SYMB, (void*)strdup(lex_tstr));
+	else if (match(T_STR))
+		return ast_leaf(A_STRLIT, (void*)strdup(lex_tstr));
+	else if (match(T_INT))
+		return ast_leaf(A_INTLIT, (void*)lex_ival);
+	else
+		return expression(NULL);
+}
+
+static node_t *postfix_expression(void) {
+	
+}
+
+static node_t *unary_expression(void) {
+	node_t *base = NULL;
+	if ((base = base_expression()) == NULL) {
+		
+	}
+}
+
+static node_t *expression(table_t *local) {
+	
+}
+
+static node_t *compound_statement(table_t *local);
+
+static node_t *statement(table_t *local) {
+	node_t *s = NULL;
+	if ((s = expression(local)) != NULL)
+		return s;
+	if ((s = compound_statement(local)) != NULL)
+		return s;
+}
+
 static node_t *compound_statement(table_t *local) {
 	expect(T_LBRC);
-
+	
+	node_t *tree = NULL, *left = NULL;
+	while (true) {
+		if ((tree = statement(local)) == NULL)
+			break;
+					
+		if (left == NULL)
+			left = tree;
+		else
+			left = ast_node(A_LIST, left, tree);
+	}
+	
 	expect(T_RBRC);
-	return NULL;
+	return ast_unary(A_BLOCK, left);
 }
 
 static node_t *type(void) {
@@ -171,7 +224,7 @@ static node_t *module_declaration(table_t *symbols) {
 }
 
 static node_t *translation_unit(void) {
-	node_t *tree, *left = NULL;
+	node_t *tree = NULL, *left = NULL;
 	while (true) {
 		if ((tree = function_definition(&symbols)) != NULL) {
 			goto append;

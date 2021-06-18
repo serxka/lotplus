@@ -26,9 +26,9 @@
 #define warning(fmt, ...) do { fprintf(stderr, "[warning: %s@%s:%d] " fmt "\n", __func__, __FILE__, __LINE__, ## __VA_ARGS__); \
                              print_backtrace(); \
                              exit(1); } while(0)
-                             
+
 extern char lex_tstr[512];
-extern uint64_t lex_ival;
+extern int64_t lex_ival;
 extern double lex_dval;
 extern table_t symbols;
 

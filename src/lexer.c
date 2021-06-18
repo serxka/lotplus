@@ -6,7 +6,7 @@
 #include "compiler.h"
 
 char lex_tstr[512];
-uint64_t lex_ival;
+int64_t lex_ival;
 double lex_dval;
 
 static const char *lex_file;
