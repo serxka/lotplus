@@ -1,5 +1,5 @@
 module .main;
 
-main(void): void {
+main(asds: asd): void {
 	
 }

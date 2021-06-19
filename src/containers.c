@@ -65,109 +65,125 @@ static void vec_grow(vec_t *v) {
 	v->cap = new_size;
 }
 
-node_t *ast_node(ast_op_t op, node_t *lh, node_t *rh) {
-	node_t *node = calloc(1, sizeof(node_t));
+node_t *ast_empty(ast_kind_t kind) {
+	node_t *node = (node_t*)calloc(1, sizeof(node_t));
 	if (node == NULL)
-		panic("failed to calloc ast node");
-	node->op = op;
-	node->lh = lh;
-	node->rh = rh;
+		panic("failed to allocated ast node");
+	node->kind = kind;
 	return node;
 }
 
-node_t *ast_unary(ast_op_t op, node_t *lh) {
-	if ((op & 0x40) != 0)
-		panic("tired to create a node without a node ast operation tag");
-	return ast_node(op, lh, NULL);
-}
-
-node_t *ast_leaf(ast_op_t op, void *value) {
-	if ((op & 0x40) == 0)
-		panic("tired to create a leaf without a leaf ast operation tag");
-	node_t *node = ast_node(op, NULL, NULL);
-	node->leaf = value;
+node_t *ast_leaf(ast_kind_t kind, union ast_val val) {
+	node_t *node = (node_t*)calloc(1, sizeof(node_t));
+	if (node == NULL)
+		panic("failed to allocated ast node");
+	node->kind = kind;
+	node->val = val;
 	return node;
 }
 
-static size_t table_get_free(table_t *t);
+static void ast_node_children_grow(node_children_t *v);
 
-table_t table_new(void) {
-	return (table_t){
+void ast_push_child(node_t *r, node_t *c) {
+	if (r->children.len >= r->children.cap)
+		ast_node_children_grow(&r->children);
+	r->children.nodes[r->children.len++] = c;
+}
+
+static void ast_node_children_grow(node_children_t *c) {
+	size_t new_size;
+	if (c->nodes == NULL)
+		new_size = 4;
+	else
+		new_size = c->cap * 2;
+
+	node_t **data = (node_t**)realloc(c->nodes, new_size * sizeof(node_t*));
+	if (data == NULL)
+		panic("failed to realloc node_t children");
+
+	c->nodes = data;
+	c->cap = new_size;
+}
+
+
+sym_kv_t sym_kv_new_func(str_t key, symbols_t block, uint64_t typeid) {
+	return (sym_kv_t){
+		.key = key,
+		.func = {.block = {._1 = block.data, ._2 = block.cap}, .ret = typeid},
+		.type = SYM_KV_FUNC,
+	};	
+}
+
+
+sym_kv_t sym_kv_new_parameter(str_t key, uint64_t typeid) {
+	return (sym_kv_t){
+		.key = key,
+		.var = {.typeid = typeid},
+		.type = SYM_KV_INNER,
+	};
+}
+
+sym_kv_t sym_kv_new_module(str_t key) {
+	return (sym_kv_t){
+		.key = key,
+		.type = SYM_KV_MODULE,
+	};
+}
+
+static void delete_sym_kv(sym_kv_t *kv) {
+	str_free(&(kv->key));
+}
+
+static size_t symbols_get_free(symbols_t *s);
+
+symbols_t symbols_new(void) {
+	return (symbols_t){
 		.data = NULL,
 		.cap = 0,
 	};
 }
 
-void table_insert(table_t *t, const char *key, void *value) {
-	size_t idx = table_get_free(t);
-	t->data[idx] = (key_value_t){.key = strdup(key), .value = value};
+void symbols_insert(symbols_t *s, const sym_kv_t kv) {
+	uint64_t idx = symbols_get_free(s);
+	s->data[idx] = kv;
 }
 
-void table_delete(table_t *t, const char *key) {
-	for (size_t i = 0; i < t->cap; ++i) {
-		if (t->data[i].key == NULL)
+void symbols_delete(symbols_t *s, const str_t *key) {
+	for (uint64_t i = 0; i < s->cap; ++i) {
+		if (s->data[i].key.d == NULL_STR.d)
 			continue;
-		if (!strcmp(t->data[i].key, key)) {
-			free(t->data[i].key);
-			t->data[i] = (key_value_t){.key = NULL, .value = NULL};
-			return;
-		}
+		if (str_cmp(&s->data[i].key, key))
+			delete_sym_kv(s->data + i);
+		return;
 	}
-	warning("tried to delete key \"%s\" from table when it didn't exist", key);
 }
 
-void *table_get(table_t *t, const char *key) {
-	for (size_t i = 0; i < t->cap; ++i) {
-		if (t->data[i].key == NULL)
-			continue;
-		if (!strcmp(t->data[i].key, key))
-			return t->data[i].key;
-	}
+sym_kv_t *symbols_get(symbols_t *s, const str_t *key) {
+	for (uint64_t i = 0; i < s->cap; ++i)
+		if (str_cmp(&s->data[i].key, key))
+			return s->data + i;
 	return NULL;
 }
 
-static size_t table_get_free(table_t *t) {
-	// Look for a free slot
-	for (size_t i = 0; i < t->cap; ++i) {
-		if (t->data[i].key == NULL) {
+static size_t symbols_get_free(symbols_t *s) {
+	// For a free slot in the table
+	for (size_t i = 0; i < s->cap; ++i)
+		if (s->data[i].key.d == NULL_STR.d)
 			return i;
-		}
-	}
-	// if not found allocate new space
-	size_t new_cap = t->cap + 16;
-	key_value_t *new_data = calloc(new_cap, sizeof(key_value_t)); // calloc so we know all empty fields are null
+
+	// If not found allocate new space
+	size_t new_cap = s->cap + 32;
+	sym_kv_t *new_data = (sym_kv_t*)calloc(new_cap, sizeof(sym_kv_t)); // calloc so we know all empty fields are null
 	if (new_data == NULL)
-		panic("failed to realloc table");
-	memcpy(new_data, t->data, t->cap); // copy over old data to new area
-	free(t->data);
-	t->data = new_data;
-	t->cap = new_cap;
+		panic("failed to realloc symbol table");
+	memcpy(new_data, s->data, s->cap); // copy over old data to new area
+	free(s->data);
+	s->data = new_data;
+	s->cap = new_cap;
 	
-	return table_get_free(t);
+	return symbols_get_free(s);
 }
 
-static struct table_iter {
-	table_t *t;
-	size_t cur;
-}t_iter;
-
-void table_iter_reset(table_t *t) {
-	t_iter.t = t;
-	t_iter.cur = 0;
-}
-
-bool table_next(void) {
-	if (t_iter.cur >= t_iter.t->cap) {
-		return false;
-	} else {
-		if (t_iter.t->data[t_iter.cur++].key != NULL)
-			return true;
-		else
-			return table_next();
-	}
-}
-
-#define IS_FAT_STR(s) (s->len > s->cap)
 
 static void str_grow(str_t *s, size_t amt);
 
@@ -196,13 +212,30 @@ str_t str_empty(void) {
 	return (str_t){0};
 }
 
-void str_cat(str_t *s, const char *data) {
+void str_cat_raw(str_t *s, const char *data) {
 	size_t cat_len = strlen(data);
 	if (s->len + cat_len > s->cap)
 		str_grow(s, cat_len);
 	memcpy(s->d + s->len, data, cat_len);
 	s->len += cat_len;
 	s->d[s->len] = 0;
+}
+
+void str_cat(str_t *s1, const str_t *s2) {
+	if (s1->len + s2->len > s1->cap)
+		str_grow(s1, s2->len);
+	memcpy(s1->d + s1->len, s2->d, s2->len);
+	s1->len += s2->len;
+	s1->d[s1->len] = 0;
+}
+
+bool str_cmp(const str_t *s1, const str_t *s2) {
+	if (s1->len != s2->len)
+		return false;
+	for (size_t i = 0; i < s1->len; ++i)
+		if (s1->d[i] != s2->d[i])
+			return false;
+	return true;
 }
 
 void str_push(str_t *s, char c) {
@@ -227,9 +260,9 @@ str_t str_promote(str_t *s) {
 }
 
 void str_free(str_t *s) {
-	if (s->len <= s->cap)
+	if (!IS_FAT_STR(s))
 		free(s->d);
-	memset(s, 0, sizeof(str_t));
+	*s = NULL_STR;
 }
 
 static void str_grow(str_t *s, size_t amt) {
