@@ -82,9 +82,24 @@ node_t *ast_leaf(ast_kind_t kind, union ast_val val) {
 	return node;
 }
 
+node_t *ast_unary(ast_kind_t kind, node_t *c) {
+	node_t *node = ast_empty(kind);
+	ast_push_child(node, c);
+	return node;
+}
+
+node_t *ast_binary(ast_kind_t kind, node_t *lh, node_t *rh) {
+	node_t *node = ast_empty(kind);
+	ast_push_child(node, lh);
+	ast_push_child(node, rh);
+	return node;
+}
+
 static void ast_node_children_grow(node_children_t *v);
 
 void ast_push_child(node_t *r, node_t *c) {
+	if (c == NULL)
+		return;
 	if (r->children.len >= r->children.cap)
 		ast_node_children_grow(&r->children);
 	r->children.nodes[r->children.len++] = c;
@@ -93,7 +108,7 @@ void ast_push_child(node_t *r, node_t *c) {
 static void ast_node_children_grow(node_children_t *c) {
 	size_t new_size;
 	if (c->nodes == NULL)
-		new_size = 4;
+		new_size = 2;
 	else
 		new_size = c->cap * 2;
 
@@ -121,6 +136,14 @@ sym_kv_t sym_kv_new_parameter(str_t key, uint64_t typeid) {
 		.var = {.typeid = typeid},
 		.type = SYM_KV_INNER,
 	};
+}
+
+sym_kv_t sym_kv_new_variable(str_t key, uint64_t typeid) {
+	return (sym_kv_t){
+		.key = key,
+		.var = {.typeid = typeid},
+		.type = SYM_KV_VARIABLE,
+	};	
 }
 
 sym_kv_t sym_kv_new_module(str_t key) {

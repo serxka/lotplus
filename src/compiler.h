@@ -47,6 +47,7 @@ typedef struct token_s {
 // This will set the lexer up with a file to begin work on
 void lex_begin(const char *src);
 token_t lex_next(void);
+uint64_t lex_column(uint64_t cursor);
 uint64_t lex_linenum(uint64_t cursor);
 
 node_t *parse_unit();

@@ -33,7 +33,13 @@ void print_node(FILE *f, node_t *n, uint64_t *i) {
 	} else {
 		switch (n->kind) {
 			case A_IDENT:
-				fprintf(f, "\tn%ld [label=\"%s\\n'%.*s'\"];\n", *i, ast_kind_debug_str[n->kind], (int)n->val.identifier.len, n->val.identifier.d);
+				fprintf(f, "\tn%ld [label=\"idnt:'%.*s'\"];\n", *i, (int)n->val.identifier.len, n->val.identifier.d);
+				break;
+			case A_INTLIT:
+				fprintf(f, "\tn%ld [label=\"%ld\"];\n", *i, n->val.sint);
+				break;
+			case A_STRLIT:
+				fprintf(f, "\tn%ld [label=\"\\\"%.*s\\\"\"];\n", *i, (int)n->val.string.len, n->val.string.d);
 				break;
 			default:
 				fprintf(f, "\tn%ld [label=\"%s\"];\n", *i, ast_kind_debug_str[n->kind]);

@@ -82,6 +82,7 @@ typedef struct symbols_s {
 
 sym_kv_t sym_kv_new_func(str_t key, symbols_t block, uint64_t typeid);
 sym_kv_t sym_kv_new_parameter(str_t key, uint64_t typeid);
+sym_kv_t sym_kv_new_variable(str_t key, uint64_t typeid);
 sym_kv_t sym_kv_new_module(str_t key);
 
 symbols_t symbols_new(void);
@@ -101,12 +102,16 @@ typedef struct node_s {
 	union ast_val {
 		symbols_t sym_table;
 		str_t identifier;
+		str_t string;
+		int64_t sint;
 	}val;
 	ast_kind_t kind;
 }node_t;
 
 node_t *ast_empty(ast_kind_t kind);
 node_t *ast_leaf(ast_kind_t kind, union ast_val val);
+node_t *ast_unary(ast_kind_t kind, node_t *c);
+node_t *ast_binary(ast_kind_t kind, node_t *lh, node_t *rh);
 void ast_push_child(node_t *r, node_t *c);
 
 #endif // _CONTAINERS_H_

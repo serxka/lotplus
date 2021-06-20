@@ -57,10 +57,10 @@ static inline char escaped_char(char final_c) {
 			case '\'':
 				return '\'';
 			default:
-				panic("unknown escaped character (%c) at %ld:%ld", c, cursor, lex_linenum(cursor));
+				panic("unknown escaped character (%c) at %ld:%ld", c, lex_column(cursor), lex_linenum(cursor));
 		}
 	} else if (c == 0) {
-		panic("character stream ended abruptly at %ld:%ld", cursor, lex_linenum(cursor));
+		panic("character stream ended abruptly at %ld:%ld", lex_column(cursor), lex_linenum(cursor));
 	}
 	++cursor;
 	return c == final_c ? 0 : c;
@@ -77,9 +77,9 @@ static str_t string_scan(void) {
 static char char_scan(void) {	
 	char c = escaped_char('\'');
 	if (c == 0)
-		panic("zero length char at %ld:%ld", cursor, lex_linenum(cursor));
+		panic("zero length char at %ld:%ld", lex_column(cursor), lex_linenum(cursor));
 	if (current_src[cursor++] != '\'')
-		panic("oversized char at %ld:%ld", cursor, lex_linenum(cursor));
+		panic("oversized char at %ld:%ld", lex_column(cursor), lex_linenum(cursor));
 	return c;
 }
 
@@ -165,8 +165,8 @@ token_t lex_next(void) {
 			SET_TYPE(T_DOLR);
 		case ',':
 			SET_TYPE(T_COMMA);
-		case '+':
-			SET_TYPE(T_ADD);
+		case '/':
+			SET_TYPE(T_DIV);
 		case '{':
 			SET_TYPE(T_LBRC);
 		case '}':
@@ -183,6 +183,13 @@ token_t lex_next(void) {
 			SET_TYPE(T_LANG);
 		case '>':
 			SET_TYPE(T_RANG);
+		case '+':
+			if (current_src[cursor] == '+') {
+				++cursor;
+				SET_TYPE(T_INC);
+			} else {
+				SET_TYPE(T_ADD);
+			}
 		case '=':
 			if (current_src[cursor] == '=') {
 				++cursor;
@@ -194,6 +201,9 @@ token_t lex_next(void) {
 			if (current_src[cursor] == '>') {
 				++cursor;
 				SET_TYPE(T_ARW);
+			}else if (current_src[cursor] == '-') {
+				++cursor;
+				SET_TYPE(T_DEC);
 			} else {
 				SET_TYPE(T_SUB);
 			}
@@ -229,7 +239,7 @@ token_t lex_next(void) {
 			else if (isdigit(c))
 				number_scan(&token);
 			else
-				panic("unknown character '%c' (%d) at %ld:%ld", c, (unsigned int)c, cursor, lex_linenum(cursor));
+				panic("unknown character '%c' (%d) at %ld:%ld", c, (unsigned int)c, lex_column(cursor), lex_linenum(cursor));
 	}
 
 	token.span_e = cursor;
@@ -237,6 +247,16 @@ token_t lex_next(void) {
 }
 
 #undef SET_TYPE
+
+uint64_t lex_column(uint64_t cursor) {
+	uint64_t col = 1;
+	for (uint64_t i = 0; i <= cursor; ++i) {
+		++col;
+		if(current_src[i] == '\n')
+			col = 0;
+	}
+	return col;
+}
 
 // Return the line number for a cursor location in the file
 uint64_t lex_linenum(uint64_t cursor) {
