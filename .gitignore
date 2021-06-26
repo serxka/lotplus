@@ -1,5 +1,5 @@
 **/*.o
 **/*.d
-lc
+lpc
 notes/
 ast.dot

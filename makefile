@@ -1,4 +1,4 @@
-PROG = lc
+PROG = lpc
 
 CFLAGS = -O2 -g -Wall -Wextra -pedantic -rdynamic
 CPPFLAGS =
@@ -16,5 +16,6 @@ ${PROG}: ${C_OBJS}
 clean:
 	rm -f ${C_OBJS} ${C_OBJS:.o=.d}
 	rm -f ${PROG}
+	rm -f ast.dot
 
 .PHONY = all clean
