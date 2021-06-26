@@ -1,6 +1,7 @@
 module .main;
 
 main(void): void {
+	number: u32;
 	++var;
 	var++;
 	3 * (5 + 4);

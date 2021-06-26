@@ -27,6 +27,11 @@ static token_t next(void) {
 	return last_token;
 }
 
+static void unstep(void) {
+	token = last_token;
+	lex_unstep();
+}
+
 // Like `match(token_type_t type)` but instead we error if we don't get want we want
 static bool expect(token_type_t type) {
 	if (match(type))
@@ -257,6 +262,33 @@ node_t *parse_expression(void) {
 	return expression_bp(0);
 }
 
+node_t *parse_variable(symbols_t *local) {
+	if (token.type == T_IDENT) {
+		str_t ident = token.string;
+		uint64_t typeid = -1;
+		node_t *expr = NULL;
+		next();
+		if (!match(T_COL)) { // Check if is a new variable or something else
+			unstep();
+			return NULL;
+		}
+		if (token.type != T_SET) // If we don't have a '=' there must be a type
+			typeid = parse_type();
+		if (match(T_SET)) { // If we have a '=' parse an expression
+			if (token.type == T_SEMI)
+				panic("expected expression at %ld:%ld, found ;", lex_column(token.span_s), lex_linenum(token.span_s));
+			expr = parse_expression();
+		}
+		expect(T_SEMI); // Must be finished with a semicolon
+		
+		// Insert it into the symbol table
+		symbols_insert(local, sym_kv_new_variable(ident, typeid));
+		node_t *ident_node = ast_leaf(A_IDENT, (union ast_val){.identifier = ident});
+		return ast_binary(A_VAR, ident_node, expr);
+	}
+	return NULL;
+}
+
 node_t *parse_return(void) {
 	if (match(T_RET)) {
 		node_t *ret = ast_unary(A_RET, parse_expression());
@@ -272,10 +304,12 @@ node_t *parse_statement(symbols_t *local) {
 	node_t *stmt = NULL;
 	if ((stmt = parse_return()) != NULL) {
 		return stmt;
+	} else if ((stmt = parse_variable(local)) != NULL){
+		return stmt;
 	} else if ((stmt = parse_expression()) != NULL) {
 		expect(T_SEMI);
 		return stmt;
-	} else if (token.type == T_LBRC) { // It is probably a compount statement
+	} else if (token.type == T_LBRC) { // It is probably a compound statement
 		return parse_compound_statement(local);
 	}
 	return NULL;

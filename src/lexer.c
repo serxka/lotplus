@@ -17,10 +17,12 @@ static const struct {
 #define KEYWORD_TOKEN_LEN (sizeof(keyword_tokens)/sizeof(keyword_tokens[0]))
 
 const char *current_src;
+static uint64_t cursor_last;
 static uint64_t cursor;
 
 void lex_begin(const char *src) {
 	cursor = 0;
+	cursor_last = 0;
 	current_src = src;
 }
 
@@ -141,6 +143,8 @@ static inline void while_comment(void) {
 #define SET_TYPE(t) token.type = t; break
 
 token_t lex_next(void) {
+	cursor_last = cursor;
+	
 	// Skip ahead of whitespace while true
 	while (skip1_whitespace())
 		;
@@ -247,6 +251,10 @@ token_t lex_next(void) {
 }
 
 #undef SET_TYPE
+
+void lex_unstep(void) {
+	cursor = cursor_last;
+}
 
 uint64_t lex_column(uint64_t cursor) {
 	uint64_t col = 1;

@@ -35,7 +35,7 @@ typedef enum ast_kind_e {
 }ast_kind_t;
 
 static const char *ast_kind_debug_str[] __attribute__((used)) = {
-	[0] = "(INVALID)", "unit", "func", "block", "idx[]", "call()", "parameters", "ret", "var",
+	[0] = "(INVALID)", "unit", "func", "block", "idx[]", "call()", "parameters", "ret", "new var",
 	"=", "-(unary)", "+", "-", "*", "/", "%", "++(pre)", "--(pre)", "(post)++", "(post)--", "->",
 	[128] = "identifer", "symbols", "intlit", "strlit",
 };
