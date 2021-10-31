@@ -2,16 +2,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "containers.h"
 #include "compiler.h"
+#include "containers.h"
 
 static void vec_grow(vec_t *v);
 
 vec_t vec_new(void) {
 	return (vec_t){
-		.data = NULL,
-		.len = 0,
-		.cap = 0,
+	        .data = NULL,
+	        .len = 0,
+	        .cap = 0,
 	};
 }
 
@@ -39,7 +39,8 @@ void *vec_top(vec_t *v) {
 
 void *vec_idx(vec_t *v, size_t idx) {
 	if (idx >= v->len)
-		panic("tried access vector at %ld when len was %ld", idx, v->len);
+		panic("tried access vector at %ld when len was %ld", idx,
+		      v->len);
 	else
 		return v->data[idx];
 	return NULL;
@@ -56,17 +57,17 @@ static void vec_grow(vec_t *v) {
 		new_size = 4;
 	else
 		new_size = v->cap * 2;
-	
-	void **data = realloc(v->data, new_size * sizeof(void*));
+
+	void **data = realloc(v->data, new_size * sizeof(void *));
 	if (data == NULL)
 		panic("failed to realloc vector");
-	
+
 	v->data = data;
 	v->cap = new_size;
 }
 
 node_t *ast_empty(ast_kind_t kind) {
-	node_t *node = (node_t*)calloc(1, sizeof(node_t));
+	node_t *node = (node_t *)calloc(1, sizeof(node_t));
 	if (node == NULL)
 		panic("failed to allocated ast node");
 	node->kind = kind;
@@ -74,7 +75,7 @@ node_t *ast_empty(ast_kind_t kind) {
 }
 
 node_t *ast_leaf(ast_kind_t kind, union ast_val val) {
-	node_t *node = (node_t*)calloc(1, sizeof(node_t));
+	node_t *node = (node_t *)calloc(1, sizeof(node_t));
 	if (node == NULL)
 		panic("failed to allocated ast node");
 	node->kind = kind;
@@ -112,7 +113,8 @@ static void ast_node_children_grow(node_children_t *c) {
 	else
 		new_size = c->cap * 2;
 
-	node_t **data = (node_t**)realloc(c->nodes, new_size * sizeof(node_t*));
+	node_t **data =
+	        (node_t **)realloc(c->nodes, new_size * sizeof(node_t *));
 	if (data == NULL)
 		panic("failed to realloc node_t children");
 
@@ -123,33 +125,34 @@ static void ast_node_children_grow(node_children_t *c) {
 
 sym_kv_t sym_kv_new_func(str_t key, symbols_t block, uint64_t typeid) {
 	return (sym_kv_t){
-		.key = key,
-		.func = {.block = {._1 = block.data, ._2 = block.cap}, .ret = typeid},
-		.type = SYM_KV_FUNC,
-	};	
+	        .key = key,
+	        .func = {.block = {._1 = block.data, ._2 = block.cap},
+	                 .ret = typeid},
+	        .type = SYM_KV_FUNC,
+	};
 }
 
 
 sym_kv_t sym_kv_new_parameter(str_t key, uint64_t typeid) {
 	return (sym_kv_t){
-		.key = key,
-		.var = {.typeid = typeid},
-		.type = SYM_KV_INNER,
+	        .key = key,
+	        .var = {.typeid = typeid},
+	        .type = SYM_KV_INNER,
 	};
 }
 
 sym_kv_t sym_kv_new_variable(str_t key, uint64_t typeid) {
 	return (sym_kv_t){
-		.key = key,
-		.var = {.typeid = typeid},
-		.type = SYM_KV_VARIABLE,
-	};	
+	        .key = key,
+	        .var = {.typeid = typeid},
+	        .type = SYM_KV_VARIABLE,
+	};
 }
 
 sym_kv_t sym_kv_new_module(str_t key) {
 	return (sym_kv_t){
-		.key = key,
-		.type = SYM_KV_MODULE,
+	        .key = key,
+	        .type = SYM_KV_MODULE,
 	};
 }
 
@@ -161,8 +164,8 @@ static size_t symbols_get_free(symbols_t *s);
 
 symbols_t symbols_new(void) {
 	return (symbols_t){
-		.data = NULL,
-		.cap = 0,
+	        .data = NULL,
+	        .cap = 0,
 	};
 }
 
@@ -196,14 +199,16 @@ static size_t symbols_get_free(symbols_t *s) {
 
 	// If not found allocate new space
 	size_t new_cap = s->cap + 32;
-	sym_kv_t *new_data = (sym_kv_t*)calloc(new_cap, sizeof(sym_kv_t)); // calloc so we know all empty fields are null
+	sym_kv_t *new_data = (sym_kv_t *)calloc(
+	        new_cap, sizeof(sym_kv_t)); // calloc so we know all empty
+	                                    // fields are null
 	if (new_data == NULL)
 		panic("failed to realloc symbol table");
 	memcpy(new_data, s->data, s->cap); // copy over old data to new area
 	free(s->data);
 	s->data = new_data;
 	s->cap = new_cap;
-	
+
 	return symbols_get_free(s);
 }
 
@@ -212,7 +217,7 @@ static void str_grow(str_t *s, size_t amt);
 
 str_t str_new(const char *data) {
 	size_t len = strlen(data);
-	char *str = (char*)calloc(len + 1, sizeof(char));
+	char *str = (char *)calloc(len + 1, sizeof(char));
 	if (str == NULL)
 		panic("failed to allocate string");
 	memcpy(str, data, len + 1);
@@ -220,7 +225,7 @@ str_t str_new(const char *data) {
 }
 
 str_t str_from(const char *data, size_t len) {
-	char *str = (char*)calloc(len + 1, sizeof(char));
+	char *str = (char *)calloc(len + 1, sizeof(char));
 	if (str == NULL)
 		panic("failed to allocate string");
 	memcpy(str, data, len + 1);
@@ -228,7 +233,7 @@ str_t str_from(const char *data, size_t len) {
 }
 
 str_t str_fat(const char *data, size_t len) {
-	return (str_t){.len = len, .cap = 0, .d = (char*)data};
+	return (str_t){.len = len, .cap = 0, .d = (char *)data};
 }
 
 str_t str_empty(void) {
@@ -269,7 +274,7 @@ void str_push(str_t *s, char c) {
 }
 
 str_t str_dup(str_t *s) {
-	char *str = (char*)calloc(s->len + 1, sizeof(char));
+	char *str = (char *)calloc(s->len + 1, sizeof(char));
 	if (str == NULL)
 		panic("failed to allocate string");
 	memcpy(str, s->d, s->len);

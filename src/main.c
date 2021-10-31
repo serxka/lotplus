@@ -20,7 +20,8 @@ char *load_file(const char *path) {
 
 void print_node(FILE *f, node_t *n, uint64_t *i) {
 	if ((n->kind & 0x80) == 0) {
-		fprintf(f, "\tn%ld [label=\"%s\"];\n", *i, ast_kind_debug_str[n->kind]);
+		fprintf(f, "\tn%ld [label=\"%s\"];\n", *i,
+		        ast_kind_debug_str[n->kind]);
 		uint64_t this_i = *i;
 		for (uint64_t j = 0; j < n->children.len; ++j) {
 			node_t *local = n->children.nodes[j];
@@ -32,18 +33,23 @@ void print_node(FILE *f, node_t *n, uint64_t *i) {
 		}
 	} else {
 		switch (n->kind) {
-			case A_IDENT:
-				fprintf(f, "\tn%ld [label=\"idnt:'%.*s'\"];\n", *i, (int)n->val.identifier.len, n->val.identifier.d);
-				break;
-			case A_INTLIT:
-				fprintf(f, "\tn%ld [label=\"%ld\"];\n", *i, n->val.sint);
-				break;
-			case A_STRLIT:
-				fprintf(f, "\tn%ld [label=\"\\\"%.*s\\\"\"];\n", *i, (int)n->val.string.len, n->val.string.d);
-				break;
-			default:
-				fprintf(f, "\tn%ld [label=\"%s\"];\n", *i, ast_kind_debug_str[n->kind]);
-				break;
+		case A_IDENT:
+			fprintf(f, "\tn%ld [label=\"idnt:'%.*s'\"];\n", *i,
+			        (int)n->val.identifier.len,
+			        n->val.identifier.d);
+			break;
+		case A_INTLIT:
+			fprintf(f, "\tn%ld [label=\"%ld\"];\n", *i,
+			        n->val.sint);
+			break;
+		case A_STRLIT:
+			fprintf(f, "\tn%ld [label=\"\\\"%.*s\\\"\"];\n", *i,
+			        (int)n->val.string.len, n->val.string.d);
+			break;
+		default:
+			fprintf(f, "\tn%ld [label=\"%s\"];\n", *i,
+			        ast_kind_debug_str[n->kind]);
+			break;
 		}
 	}
 }
@@ -79,19 +85,17 @@ int main(int argc, char *argv[]) {
 		// 	}
 		// 	switch (t.type) {
 		// 		case T_IDENT:
-		// 			printf("%.*s ", (int)t.string.len, t.string.d);
-		// 			break;
-		// 		case T_STR:
-		// 			// line_len += printf("\"%s: '%.*s' \", ", token_debug_str[t.type], (int)t.string.len, t.string.d);
-		// 			printf("\"%.*s\"", (int)t.string.len, t.string.d);
-		// 			break;
-		// 		case T_CHR:
-		// 			// line_len += printf("\"%s\": '%c', ", token_debug_str[t.type], t.character);
-		// 			printf("'%c'", t.character);
-		// 			break;
-		// 		case T_INT:
-		// 			// line_len += printf("\"%s\": %ld, ", token_debug_str[t.type], t.sint);
-		// 			printf("%ld ", t.sint);
+		// 			printf("%.*s ", (int)t.string.len,
+		// t.string.d); 			break; 		case T_STR:
+		// 			// line_len += printf("\"%s: '%.*s' \", ",
+		// token_debug_str[t.type], (int)t.string.len, t.string.d);
+		// 			printf("\"%.*s\"", (int)t.string.len,
+		// t.string.d); 			break; 		case T_CHR:
+		// 			// line_len += printf("\"%s\": '%c', ",
+		// token_debug_str[t.type], t.character); 			printf("'%c'",
+		// t.character); 			break; 		case T_INT:
+		// 			// line_len += printf("\"%s\": %ld, ",
+		// token_debug_str[t.type], t.sint); 			printf("%ld ", t.sint);
 		// 			break;
 		// 		case T_SEMI:
 		// 		case T_LBRC:
@@ -99,17 +103,17 @@ int main(int argc, char *argv[]) {
 		// 			new_line = true;
 		// 			break;
 		// 		default:
-		// 			// line_len += printf("\"%s\", ", token_debug_str[t.type]);
-		// 			printf("%s ", token_debug_str[t.type]);
-		// 			break;
+		// 			// line_len += printf("\"%s\", ",
+		// token_debug_str[t.type]); 			printf("%s ",
+		// token_debug_str[t.type]); 			break;
 		// 	}
 		// 	t = lex_next();
-		// }		
+		// }
 		// printf("\n\n");
 		node_t *ast = parse_unit();
 		print_ast("ast.dot", ast);
 
-		free((void*)file);
+		free((void *)file);
 	}
 	return 0;
 }

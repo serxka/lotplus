@@ -18,4 +18,9 @@ clean:
 	rm -f ${PROG}
 	rm -f ast.dot
 
-.PHONY = all clean
+clang-format:
+	@for src in $(shell find . -name '*.c' -or -name '*.h') ; do \
+		clang-format -style=file -i $$src -verbose ; \
+	done
+
+.PHONY = all clean clang-format
