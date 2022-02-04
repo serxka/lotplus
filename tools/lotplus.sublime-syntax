@@ -1,0 +1,121 @@
+%YAML 1.2
+---
+file_extensions:
+  - lp
+scope: source.lp
+variables:
+  identifier: '\b[[:alpha:]_][[:alnum:]_]*\b'
+  core_func: 'malloc|free|assert|panic'
+  control_words: 'if|else|for|do|while|loop|ret|operator|defer|switch|case|break|default|type'
+  numeric_types: 'u8|i8|u16|i16|u32|i32|u64|i64|isize|usize|f32|f64'
+  basic_types: 'void|{{numeric_types}}|str|char|self'
+  before_tag: 'struct|union|enum'
+  modifiers: 'priv|const|volatile|comptime|align|noret'
+
+contexts:
+  main:
+    - include: comments
+    - include: keywords
+    - match: ':|\.'
+      scope: punctuation.accessor.lp
+    - include: operators
+    - include: numbers
+    - include: strings
+    - match: '\(|\{|\['
+      push: brackets
+    - match: '\)|\}\]'
+      scope: invalid.illegal.stray-bracket-end
+    - match: ','
+      scope: punctuation.separator.c
+    - include: modifiers
+    - include: types
+    - match: ';'
+      scope: punctuation.terminator.c
+
+  comments:
+    - match: '#\['
+      scope: punctuation.definition.comment.lp
+      push:
+        - meta_scope: comment.line.lp
+        - match: '\]#'
+          pop: true
+    - match: '#'
+      scope: punctuation.definition.comment.lp
+      push:
+        - meta_scope: comment.line.lp
+        - match: $
+          pop: true
+
+  keywords:
+    - match: '\b({{control_words}})\b'
+      scope: keyword.control.lp
+    - match: '\bmodule|import|use\b'
+      scope: keyword.control.import.lp
+
+  numbers:
+    - match: '\b(0x[_0-9a-fA-F]+)|(-?[_0-9.]+)({{numeric_types}})?\b'
+      scope: storage.type.lp
+    - match: '\bnull|true|false\b'
+      scope: constant.language.lp
+
+  operators:
+    - match: '\+\=|-\=|\*\=|/\=|%\=|&\=|\|\=|\^\=|>>\=|<<\='
+      scope: keyword.operator.assignment.augmented.lp
+    - match: '<<|>>|&&|\|\|'
+      scope: keyword.operator.arithmetic.lp
+    - match: '<\=|>\=|\=\=|<|>|\!\='
+      scope: keyword.operator.comparison.lp
+    - match: '\*|\+|\-|/|%|\||\^|~|!'
+      scope: keyword.operator.arithmetic.lp
+    - match: '@\^|@<|@|cast|bit|sizeof|alignof|typeof|offsetof'
+      scope: keyword.operator.lp
+    - match: '\='
+      scope: keyword.operator.assignment.lp
+    # - match: '\$.'
+    #   scope: punctuation.definition.variable.lp
+    # - match: '\.\.'
+    #   scope: keyword.operator.range.lp
+
+  strings:
+    - match: '(b|)?(")'
+      captures:
+        1: storage.type.string.lp
+        2: punctuation.definition.string.begin.lp
+      push:
+        - meta_scope: string.quoted.double.lp
+        - match: '\\.'
+          scope: constant.character.escape.lp
+        - match: '%(ll|l|q)?([dDuUxXfFcsp])'
+          scope: constant.other.placeholder.lp
+        - match: '"'
+          scope: punctuation.definition.string.end.lp
+          pop: true
+    - match: "(b|)?(')"
+      captures:
+        1: storage.type.string.lp
+        2: punctuation.definition.string.begin.lp
+      push:
+        - meta_scope: string.quoted.single.lp
+        - match: "'"
+          scope: punctuation.definition.string.end.lp
+          pop: true
+
+  modifiers:
+    - match: '\b({{modifiers}})\b'
+      scope: storage.modifier.lp
+
+  types:
+    - match: '\b({{before_tag}})\b'
+      scope: keyword.declaration.lp
+    - match: '\b({{basic_types}})\b'
+      scope: storage.type.lp
+    - match: '\b{{core_func}}\b'
+      scope: support.function.lp
+    - match: '{{identifier}}\s*:\s*({{identifier}})'
+      captures:
+        1: storage.type.lp
+
+  brackets:
+    - match: '\)|\}\]'
+      pop: true
+    - include: main
