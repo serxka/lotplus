@@ -112,22 +112,22 @@ impl Token {
 		std::mem::discriminant(self) == std::mem::discriminant(b)
 	}
 
-	pub const fn any_character() -> Self {
+	pub const fn any_char() -> Self {
 		Token::CharacterLit(EOF_CHAR)
 	}
 
-	pub const fn any_identifier() -> Self {
+	pub const fn any_ident() -> Self {
 		Token::Identifier(String::new())
 	}
 
-	pub const fn any_integer() -> Self {
+	pub const fn any_int() -> Self {
 		Token::IntegerLit {
 			value: 0,
 			suffix: IntegerSuffix::None,
 		}
 	}
 
-	pub const fn any_string() -> Self {
+	pub const fn any_str() -> Self {
 		Token::StringLit(String::new())
 	}
 }

@@ -1,252 +1,36 @@
-use crate::lexer::{IntegerSuffix, Token};
-use crate::sema::{BinOp, PointerType, Qualifier, UnaryOp};
+use crate::ast::*;
+use crate::lexer::Token;
 
-#[derive(Debug)]
-pub enum AstNode {
-	/// The top level node of the syntax tree, contains a list of definitions
-	Unit(Vec<AstNode>),
-	/// Should contain a path without the trailing group
-	ModuleDecl(Box<AstNode>),
-	/// Should contain a path, can also contain a group at the end
-	ImportDecl(Box<AstNode>),
-	UseDecl(Box<AstNode>),
-	Path {
-		/// Whether the path is absolute or not (starts with a `.`)
-		absolute: bool,
-		/// The base of the path: `.parser.char.spaces`
-		base: Vec<AstNode>,
-		/// If the path ends with a `.{...}` the values within will be
-		/// contained here, otherwise it is empty.
-		group: Vec<AstNode>,
-	},
-	Identifier(String),
-	Integer(u128, IntegerSuffix),
-	String(String),
-	Character(char),
-	Boolean(bool),
-	Null,
-	SelfValue,
-	StructLiteral(Vec<(Option<AstNode>, AstNode)>),
-	Type {
-		pointer: PointerType,
-		base_ty: Box<AstNode>,
-		array_size: Option<Box<AstNode>>,
-	},
-	Qualifiers(Vec<Qualifier>),
-	Function {
-		identifier: Box<AstNode>,
-		parameters: Vec<(AstNode, AstNode, AstNode)>,
-		qualifiers: Box<AstNode>,
-		return_types: Vec<AstNode>,
-		body: Box<AstNode>,
-	},
-	MultipleRetVariable {
-		vars: Vec<AstNode>,
-		initial: Box<AstNode>,
-	},
-	Variable {
-		identifier: Box<AstNode>,
-		qualifiers: Box<AstNode>,
-		ty: Option<Box<AstNode>>,
-		initial: Option<Box<AstNode>>,
-	},
-	Arguments(Vec<AstNode>),
-	Block(Vec<AstNode>),
-	BinOp(BinOp, Box<AstNode>, Box<AstNode>),
-	UnaryOp(UnaryOp, Box<AstNode>),
-	Return(Vec<AstNode>),
-	Break,
-	Continue,
-	If {
-		precond: Option<Box<AstNode>>,
-		cond: Box<AstNode>,
-		body: Box<AstNode>,
-		else_body: Option<Box<AstNode>>,
-	},
-	For {
-		cond: Box<(Option<AstNode>, AstNode, Option<AstNode>)>,
-		body: Box<AstNode>,
-	},
-	DoWhile {
-		body: Box<AstNode>,
-		cond: Box<AstNode>,
-	},
-	While {
-		cond: Box<AstNode>,
-		body: Box<AstNode>,
-	},
-	Loop(Box<AstNode>),
-	Defer(Box<AstNode>),
-	Switch {
-		value: Box<AstNode>,
-		cases: Vec<AstNode>,
-	},
-	Case {
-		value: Box<AstNode>,
-		body: Box<AstNode>,
-	},
-	Default(Box<AstNode>),
-	VarArgs,
-	SelfType,
-	Struct {
-		identifier: Box<AstNode>,
-		qualifiers: Box<AstNode>,
-		members: Vec<(AstNode, AstNode, AstNode)>,
-		body: Option<Box<AstNode>>,
-	},
-	Union {
-		identifier: Box<AstNode>,
-		qualifiers: Box<AstNode>,
-		members: Vec<(AstNode, AstNode, AstNode)>,
-		body: Option<Box<AstNode>>,
-	},
-	Enum {
-		identifier: Box<AstNode>,
-		qualifiers: Box<AstNode>,
-		elements: Vec<(AstNode, Option<AstNode>)>,
-		body: Option<Box<AstNode>>,
-	},
-	Nil,
+macro_rules! error {
+	($this:expr, $($arg:tt)*) => {{
+		let fmt = format!($($arg)*);
+		$this.error(&fmt);
+	}}
 }
 
-impl AstNode {
-	pub fn ident(token: Token) -> AstNode {
-		match token {
-			Token::Identifier(i) => AstNode::Identifier(i),
-			_ => {
-				panic!("expected a token kind of identifier, found {:?}", token)
-			}
-		}
-	}
-
-	pub fn unaryop(op: Token, lhs: AstNode) -> AstNode {
-		let op = match op {
-			Token::Plus => UnaryOp::Positive,
-			Token::Minus => UnaryOp::Negative,
-			Token::Not => UnaryOp::Not,
-			Token::BitNot => UnaryOp::Negate,
-			Token::Sizeof => UnaryOp::Sizeof,
-			Token::Alignof => UnaryOp::Alignof,
-			Token::Typeof => UnaryOp::Typeof,
-			Token::Offsetof => UnaryOp::Offsetof,
-			Token::Deref => UnaryOp::Dereference,
-			Token::Ref => UnaryOp::Reference,
-			_ => panic!("invalid unary operator token: {:?}", op),
-		};
-		AstNode::UnaryOp(op, Box::new(lhs))
-	}
-
-	pub fn binop(op: Token, lhs: AstNode, rhs: AstNode) -> AstNode {
-		let op = match op {
-			Token::Plus => BinOp::Add,
-			Token::Minus => BinOp::Subtract,
-			Token::Star => BinOp::Multiply,
-			Token::Slash => BinOp::Divide,
-			Token::Percent => BinOp::Remainder,
-			Token::BitXor => BinOp::BitwiseXor,
-			Token::BitAnd => BinOp::BitwiseAnd,
-			Token::BitOr => BinOp::BitwiseOr,
-			Token::And => BinOp::And,
-			Token::Or => BinOp::Or,
-			Token::ShiftLeft => BinOp::ShiftLeft,
-			Token::ShiftRight => BinOp::ShiftRight,
-			Token::Lt => BinOp::LessThan,
-			Token::Gt => BinOp::GreaterThan,
-			Token::OpenParen => BinOp::FuncCall,
-			Token::OpenBracket => BinOp::Index,
-			Token::Dot => BinOp::Member,
-			Token::Cast => BinOp::Cast,
-			Token::Bit => BinOp::BitCast,
-			Token::Equal => BinOp::Set,
-			Token::PlusSet => BinOp::SetAdd,
-			Token::MinusSet => BinOp::SetSubtract,
-			Token::StarSet => BinOp::SetMultiply,
-			Token::SlashSet => BinOp::SetDivide,
-			Token::BitAndSet => BinOp::SetAnd,
-			Token::BitXorSet => BinOp::SetXor,
-			Token::BitOrSet => BinOp::SetOr,
-			Token::Equate => BinOp::Equal,
-			Token::NotEqual => BinOp::NotEqual,
-			_ => panic!("invalid binary operator token: {:?}", op),
-		};
-		AstNode::BinOp(op, Box::new(lhs), Box::new(rhs))
-	}
-
-	pub fn empty_qualifiers() -> AstNode {
-		AstNode::Qualifiers(Vec::new())
-	}
-
-	pub fn cons_pointer_type(
-		x: PointerType,
-		list: Box<AstNode>,
-	) -> Box<AstNode> {
-		let (mut pointer, base_ty, array_size) = match *list {
-			AstNode::Type {
-				pointer,
-				base_ty,
-				array_size,
-			} => (pointer, base_ty, array_size),
-			_ => unreachable!(),
-		};
-		if pointer == PointerType::None {
-			pointer = x;
-			if array_size.is_some() {
-				Box::new(AstNode::Type {
-					pointer,
-					base_ty: Box::new(AstNode::Type {
-						pointer: PointerType::None,
-						base_ty,
-						array_size,
-					}),
-					array_size: None,
-				})
-			} else {
-				Box::new(AstNode::Type {
-					pointer,
-					base_ty,
-					array_size,
-				})
-			}
-		} else {
-			Box::new(AstNode::Type {
-				pointer: x,
-				base_ty: Box::new(AstNode::Type {
-					pointer,
-					base_ty,
-					array_size,
-				}),
-				array_size: None,
-			})
-		}
-	}
-
-	pub fn set_var_initial(&mut self, init: Option<Box<AstNode>>) {
-		match self {
-			AstNode::Variable {
-				ref mut initial, ..
-			} => *initial = init,
-			_ => panic!("you fool"),
-		}
-	}
+macro_rules! error_fatal {
+	($this:expr, $($arg:tt)*) => {{
+		let fmt = format!($($arg)*);
+		$this.error_fatal(&fmt);
+	}}
 }
 
-impl Qualifier {
-	pub fn from_token(token: Token) -> Self {
-		match token {
-			Token::Priv => Self::Private,
-			Token::Const => Self::Constant,
-			Token::Volatile => Self::Volatile,
-			Token::Comptime => Self::CompileTime,
-			Token::Noret => Self::NoReturn,
-			Token::Align => panic!("cannot convert align directly"),
-			_ => panic!("token is not a qualifier"),
+macro_rules! unwrap {
+	($this:expr, $func:expr, $($arg:tt)*) => {{
+		match $func {
+			Some(x) => x,
+			None => {
+				error_fatal!($this, $($arg)*);
+				unreachable!()
+			}
 		}
-	}
+	}}
 }
 
 pub struct Parser {
-	pub tokens: Vec<Token>,
-	pub index: usize,
+	tokens: Vec<Token>,
+	index: usize,
+	errors: usize,
 }
 
 impl Parser {
@@ -254,6 +38,7 @@ impl Parser {
 		Self {
 			tokens: tokens,
 			index: 0,
+			errors: 0,
 		}
 	}
 
@@ -261,6 +46,12 @@ impl Parser {
 		let t = self.tokens.get(self.index);
 		self.index += 1;
 		t.cloned()
+	}
+
+	fn take(&mut self) -> Token {
+		let t = self.tokens.get(self.index);
+		self.index += 1;
+		t.unwrap().clone()
 	}
 
 	fn dump(&mut self, n: usize) {
@@ -302,25 +93,6 @@ impl Parser {
 		}
 	}
 
-	#[allow(dead_code)]
-	fn find_two(&mut self, k1: Token, k2: Token) -> bool {
-		match (self.peek_one(), self.peek_two()) {
-			(Some(t1), Some(t2)) => {
-				if (std::mem::discriminant(t1) == std::mem::discriminant(&k1))
-					&& (std::mem::discriminant(t2)
-						== std::mem::discriminant(&k2))
-				{
-					self.bump();
-					self.bump();
-					true
-				} else {
-					false
-				}
-			}
-			_ => false,
-		}
-	}
-
 	fn expect(&mut self, kind: Token) -> Token {
 		match self.bump() {
 			Some(t) => {
@@ -334,321 +106,378 @@ impl Parser {
 		}
 	}
 
-	pub fn parse_unit(mut self) -> AstNode {
-		let mut nodes = Vec::new();
+	fn error(&mut self, msg: &str) {
+		self.errors += 1;
+		eprintln!("{}", msg);
+		if self.errors > 10 {
+			std::process::exit(1);
+		}
+	}
+
+	fn error_fatal(&mut self, msg: &str) {
+		eprintln!("FATAL: {}", msg);
+		std::process::exit(1);
+	}
+
+	fn sep_by<F: FnMut(&mut Self)>(&mut self, t: Token, mut f: F) {
+		while self.find(t.clone()) {
+			f(self);
+		}
+	}
+
+	fn end_by<F: FnMut(&mut Self)>(&mut self, t: Token, mut f: F) {
+		while self.find(t.clone()) {
+			f(self);
+		}
+		self.find(t);
+	}
+
+	pub fn parse_unit(mut self) -> Unit {
+		let mut module = None;
+		let mut imports = Vec::new();
+		let mut statements = Vec::new();
 		loop {
 			// Try and parse a module declaration
-			let child = self.parse_module_decl();
-			if child.is_some() {
-				nodes.push(child.unwrap());
+			let m = self.parse_module_decl();
+			if m.is_some() {
+				// We have already parsed a module declaration, we can only have
+				// one per file
+				if module.is_some() {
+					error!(
+						self,
+						"We have already parsed a module declaration ({:?}), \
+						 tried to re-declare module as: {:?}",
+						module.unwrap(),
+						m
+					);
+				}
+				module = m;
 				continue;
 			}
 			// Try and parse an import declaration
-			let child = self.parse_import_decl();
-			if child.is_some() {
-				nodes.push(child.unwrap());
+			let i = self.parse_import_decl();
+			if i.is_some() {
+				imports.push(i.unwrap());
 				continue;
 			}
-			// Try and parse a use declaration
-			let child = self.parse_use_decl();
-			if child.is_some() {
-				nodes.push(child.unwrap());
+			// Try and parse a statement, however limit to only valid global
+			// statements
+			let s = self.parse_statement(true);
+			if s.is_some() {
+				statements.push(s.unwrap());
 				continue;
 			}
-			// Try and parse a structure definition
-			let child = self.parse_structure(false);
-			if child.is_some() {
-				nodes.push(child.unwrap());
-				continue;
-			}
-			// Try and parse a function definition
-			let child = self.parse_function();
-			if child.is_some() {
-				nodes.push(child.unwrap());
-				continue;
-			}
-			// Try and parse a global variable definition
-			let child = self.parse_variable();
-			if child.is_some() {
-				nodes.push(child.unwrap());
-				continue;
-			}
-			// Try to parse spare semicolons
-			if self.find(Token::SemiColon) {
-				continue;
-			}
-			// We could not parse anything, this must be the end of the file
+			// We could not parse anything, if the file was valid the next token
+			// must be an EOF
 			if self.peek_one().is_some() {
-				panic!("expected end of file, found: {:?}", self.bump());
+				error_fatal!(
+					self,
+					"Expected EOF however found tokens (such as: {:?})",
+					self.bump().unwrap()
+				);
 			}
+
+			// We have successfully parsed everything
 			break;
 		}
+		let module = match module {
+			Some(x) => x,
+			None => {
+				error!(
+					self,
+					"No module declaration was found, defaulting to \".main\""
+				);
+				Path::main_root()
+			}
+		};
 
-		AstNode::Unit(nodes)
+		Unit {
+			module,
+			imports,
+			statements,
+		}
 	}
 
-	fn parse_symbol_path(&mut self, grouping: bool) -> AstNode {
+	fn parse_symbol_path(&mut self, grouping: bool) -> Path {
 		// Is it an absolute path?
 		let absolute = self.find(Token::Dot);
 		let mut base = Vec::new();
 		let mut group = Vec::new();
-		// There needs to be at least one identifier
-		base.push(AstNode::ident(self.expect(Token::any_identifier())));
-		while self.find(Token::Dot) {
-			match self.bump() {
-				// Continue to
-				Some(t) if t.is_ident() => base.push(AstNode::ident(t)),
-				Some(t) if t.is_equivalent(&Token::OpenBrace) => {
+		// There needs to be at least one identifier in the path
+		let ident = self.expect(Token::any_ident());
+		base.push(ident.into());
+		// While we find another section of the path parse it
+		self.sep_by(Token::Dot, |p| {
+			match p.take() {
+				// Continue to parse another segment
+				t if t.is_ident() => base.push(t.into()),
+				// Alternatively parse the group of the path
+				t if t.is_equivalent(&Token::OpenBrace) => {
 					if !grouping {
-						panic!("grouping was not expected in this context");
+						error!(
+							p,
+							"Path grouping was not expected in this context"
+						);
 					}
-					group.push(AstNode::ident(
-						self.expect(Token::any_identifier()),
-					));
-					while self.find(Token::Comma) {
-						match self.peek_one() {
-							Some(t) if t.is_ident() => {
-								group.push(AstNode::ident(self.bump().unwrap()))
-							}
-							t => panic!("unexpected token in path: {:?}", t),
-						}
-					}
-					self.expect(Token::CloseBrace);
+					let ident = p.expect(Token::any_ident());
+					group.push(ident.into());
+					// Continue to parse the group elements
+					p.end_by(Token::Comma, |p| match p.bump() {
+						Some(t) if t.is_ident() => group.push(t.into()),
+						t => error!(p, "Unexpected token in path: {:?}", t),
+					});
+					// We should find a close brace at the end of the group
+					p.expect(Token::CloseBrace);
 				}
-				_ => break,
+				t => error!(p, "Unexpected token in path: {:?}", t),
 			}
-		}
+		});
 
-		AstNode::Path {
+		Path {
 			absolute,
 			base,
 			group,
 		}
 	}
 
-	fn parse_module_decl(&mut self) -> Option<AstNode> {
+	fn parse_module_decl(&mut self) -> Option<Path> {
 		if self.find(Token::Module) {
 			let path = self.parse_symbol_path(false);
 			self.expect(Token::SemiColon);
-			Some(AstNode::ModuleDecl(Box::new(path)))
+			Some(path)
 		} else {
 			None
 		}
 	}
 
-	fn parse_import_decl(&mut self) -> Option<AstNode> {
+	fn parse_import_decl(&mut self) -> Option<Path> {
 		if self.find(Token::Import) {
 			let path = self.parse_symbol_path(false);
 			self.expect(Token::SemiColon);
-			Some(AstNode::ImportDecl(Box::new(path)))
+			Some(path)
 		} else {
 			None
 		}
 	}
 
-	fn parse_use_decl(&mut self) -> Option<AstNode> {
+	fn parse_use_decl(&mut self) -> Option<Stmt> {
 		if self.find(Token::Use) {
 			let path = self.parse_symbol_path(true);
 			self.expect(Token::SemiColon);
-			Some(AstNode::UseDecl(Box::new(path)))
+			Some(Stmt::UseDecl(path))
 		} else {
 			None
 		}
 	}
 
-	fn parse_members(&mut self) -> Vec<(AstNode, AstNode, AstNode)> {
-		fn member1(p: &mut Parser) -> Option<(AstNode, AstNode, AstNode)> {
-			if p.peek_find(Token::any_identifier()) {
-				let var = AstNode::ident(p.bump().unwrap());
+	fn parse_fields(&mut self) -> Vec<(Identifier, Qualifiers, Type)> {
+		// Parse a single field of the struct
+		fn field1(p: &mut Parser) -> Option<(Identifier, Qualifiers, Type)> {
+			if p.peek_find(Token::any_ident()) {
+				// Parse field name
+				let field = p.take().into();
+				// Any qualifiers
 				let qualifiers = p.parse_qualifiers();
+				// Must be followed by a token to separate type
 				p.expect(Token::Colon);
+				// Parse the type of the field
 				let ty = p.parse_type();
-				Some((var, qualifiers, ty))
+				Some((field, qualifiers, ty))
 			} else {
 				None
 			}
 		}
-		let mut members = Vec::new();
-		match member1(self) {
-			None => return members,
-			Some(x) => members.push(x),
+		// Try and parse all the fields
+		let mut fields = Vec::new();
+		// We either have zero fields, or one or more
+		match field1(self) {
+			// If we have none, just return an empty array
+			None => return fields,
+			// Otherwise add it to our list of fields
+			Some(x) => fields.push(x),
 		}
-		while self.find(Token::Comma) {
-			members.push(member1(self).unwrap());
-		}
-		members
+		// Keep trying to parse fields while we find commas
+		self.sep_by(Token::Comma, |p| {
+			fields.push(field1(p).unwrap());
+		});
+
+		fields
 	}
 
-	fn parse_elements(&mut self) -> Vec<(AstNode, Option<AstNode>)> {
-		fn element1(p: &mut Parser) -> Option<(AstNode, Option<AstNode>)> {
-			if p.peek_find(Token::any_identifier()) {
-				let var = AstNode::ident(p.bump().unwrap());
-				if p.find(Token::Equal) {
-					let val = p.parse_expr().unwrap();
-					Some((var, Some(val)))
+	fn parse_elements(&mut self) -> Vec<(Identifier, Option<Box<Expr>>)> {
+		// Parse a single field of the enum
+		fn element1(p: &mut Parser) -> Option<(Identifier, Option<Box<Expr>>)> {
+			if p.peek_find(Token::any_ident()) {
+				// Parse enum variant
+				let variant = p.take().into();
+				// See if it has a set value
+				let value = if p.find(Token::Equal) {
+					Some(unwrap!(
+						p,
+						p.parse_expr(),
+						"Expected expression after `=` in enum variant"
+					))
 				} else {
-					Some((var, None))
-				}
+					None
+				};
+				Some((variant, value))
 			} else {
 				None
 			}
 		}
+		// Try and parse all the elements
 		let mut elements = Vec::new();
-		match element1(self) {
-			None => return elements,
-			Some(x) => elements.push(x),
-		}
-		while self.find(Token::Comma) {
-			elements.push(element1(self).unwrap());
-		}
+		// We must have at least one variant in our enum
+		elements.push(unwrap!(
+			self,
+			element1(self),
+			"Enum must contain at least one variant"
+		));
+		// Keep trying to parse variants while we find commas
+		self.sep_by(Token::Comma, |p| {
+			elements.push(element1(p).unwrap());
+		});
+
 		elements
 	}
 
-	fn parse_structure(&mut self, anonymous: bool) -> Option<AstNode> {
-		fn parse_body(p: &mut Parser) -> AstNode {
-			let mut nodes = Vec::new();
+	fn parse_structure(&mut self, anonymous: bool) -> Option<Structure> {
+		fn parse_body(p: &mut Parser) -> Box<Stmt> {
+			let mut stmts = Vec::new();
 			loop {
-				let child = p.parse_use_decl();
-				if child.is_some() {
-					nodes.push(child.unwrap());
+				let s = p.parse_use_decl();
+				if s.is_some() {
+					stmts.push(s.unwrap());
 					continue;
 				}
-				let child = p.parse_function();
-				if child.is_some() {
-					nodes.push(child.unwrap());
+				let s = p.parse_function();
+				if s.is_some() {
+					stmts.push(s.map(Stmt::Function).unwrap());
 					continue;
 				}
-				let child = p.parse_variable();
-				if child.is_some() {
-					nodes.push(child.unwrap());
+				let s = p.parse_variable();
+				if s.is_some() {
+					stmts.push(s.unwrap());
 					continue;
 				}
 				break;
 			}
-			AstNode::Block(nodes)
+			Box::new(Stmt::Block(stmts))
 		}
-		fn parse_struct(
+		fn parse_struc<T, F: FnMut(&mut Parser) -> Vec<T>>(
 			p: &mut Parser,
+			mut parse_fields: F,
 			anonymous: bool,
-		) -> (
-			Box<AstNode>,
-			Box<AstNode>,
-			Vec<(AstNode, AstNode, AstNode)>,
-			Option<Box<AstNode>>,
-		) {
+		) -> (Identifier, Qualifiers, Vec<T>, Option<Box<Stmt>>) {
+			// Try and parse an identifier if necessary
 			let ident = if anonymous {
-				AstNode::Nil
+				Identifier::nil()
 			} else {
-				AstNode::ident(p.expect(Token::any_identifier()))
+				p.expect(Token::any_ident()).into()
 			};
+			// Try and parse qualifiers if we have a colon to mark them
 			let qualifiers = if p.find(Token::Colon) {
 				p.parse_qualifiers()
 			} else {
-				AstNode::empty_qualifiers()
+				Qualifiers::nil()
 			};
+			// The start of the structure block
 			p.expect(Token::OpenBrace);
-			let members = p.parse_members();
+			// Fields within the structure
+			let members = parse_fields(p);
+			// We should have a semicolon to mark the end of fields
 			p.expect(Token::SemiColon);
-			let body = if !p.find(Token::CloseBrace) {
+			// If we don't find a closing brace, we probably have a body to our
+			// structure
+			let body = if !p.peek_find(Token::CloseBrace) {
 				if anonymous {
-					panic!("an anonymous struct/union cannot have a body");
+					error!(p, "an anonymous structure cannot have a body");
 				}
-				let b = Some(Box::new(parse_body(p)));
-				p.bump();
-				b
+				Some(parse_body(p))
 			} else {
 				None
 			};
+			// We should have a closing brace for our structure
+			p.expect(Token::CloseBrace);
 
-			(Box::new(ident), Box::new(qualifiers), members, body)
+			(ident, qualifiers, members, body)
 		}
 
 		if self.find(Token::Struct) {
-			let s = parse_struct(self, anonymous);
-			Some(AstNode::Struct {
-				identifier: s.0,
+			let s = parse_struc(self, Self::parse_fields, anonymous);
+			Some(Structure::Struct(Struct {
+				ident: s.0,
 				qualifiers: s.1,
-				members: s.2,
+				fields: s.2,
 				body: s.3,
-			})
+			}))
 		} else if self.find(Token::Union) {
-			let u = parse_struct(self, anonymous);
-			Some(AstNode::Union {
-				identifier: u.0,
+			let u = parse_struc(self, Self::parse_fields, anonymous);
+			Some(Structure::Union(Union {
+				ident: u.0,
 				qualifiers: u.1,
-				members: u.2,
+				fields: u.2,
 				body: u.3,
-			})
+			}))
 		} else if self.find(Token::Enum) {
-			let ident = if anonymous {
-				AstNode::Nil
-			} else {
-				AstNode::ident(self.expect(Token::any_identifier()))
-			};
-			let qualifiers = if self.find(Token::Colon) {
-				self.parse_qualifiers()
-			} else {
-				AstNode::empty_qualifiers()
-			};
-			self.expect(Token::OpenBrace);
-			let elements = self.parse_elements();
-			self.expect(Token::SemiColon);
-			let body = if !self.find(Token::CloseBrace) {
-				if anonymous {
-					panic!("an anonymous enum cannot have a body");
-				}
-				let b = Some(Box::new(parse_body(self)));
-				self.bump();
-				b
-			} else {
-				None
-			};
-
-			Some(AstNode::Enum {
-				identifier: Box::new(ident),
-				qualifiers: Box::new(qualifiers),
-				elements,
-				body,
-			})
+			let e = parse_struc(self, Self::parse_elements, anonymous);
+			Some(Structure::Enum(Enum {
+				ident: e.0,
+				qualifiers: e.1,
+				elements: e.2,
+				body: e.3,
+			}))
 		} else {
 			None
 		}
 	}
 
-	fn parse_function(&mut self) -> Option<AstNode> {
-		fn parse_return_type(p: &mut Parser) -> Vec<AstNode> {
+	fn parse_function(&mut self) -> Option<Function> {
+		fn parse_return_type(p: &mut Parser) -> Vec<Type> {
+			let mut rets = Vec::new();
+			// If we have multiple return values
 			if p.find(Token::Lt) {
-				let mut rets = Vec::new();
+				// Get our first return type
 				rets.push(p.parse_type());
-				while p.find(Token::Comma) {
+				// Keep looking for more separated by commas
+				p.sep_by(Token::Comma, |p| {
 					rets.push(p.parse_type());
-				}
+				});
+				// Our return types closing bracket
 				p.expect(Token::Gt);
-				rets
 			} else {
-				vec![p.parse_type()]
+				// Parse a single type otherwise
+				rets.push(p.parse_type())
 			}
+			rets
 		}
 
-		if self.peek_find(Token::any_identifier()) {
+		if self.peek_find(Token::any_ident()) {
+			// Check to see that we do have an identifier followed by a `(`, if
+			// we don't this isn't a function
 			if self.peek_two().is_some()
 				&& !self.peek_two().unwrap().is_equivalent(&Token::OpenParen)
 			{
 				return None;
 			}
-			let identifier = self.bump().unwrap();
+			// Take our function identifier
+			let ident = self.take().into();
+			// Parse our parameters
 			self.expect(Token::OpenParen);
 			let parameters = self.parse_parameters();
 			self.expect(Token::CloseParen);
+			// Parse any qualifiers and our type colon
 			let qualifiers = self.parse_qualifiers();
 			self.expect(Token::Colon);
+			// Parse return type
 			let return_types = parse_return_type(self);
+			// Parse function body
 			let body = self.parse_compound_statement();
 
-			Some(AstNode::Function {
-				identifier: Box::new(AstNode::ident(identifier)),
+			Some(Function {
+				ident,
 				parameters,
-				qualifiers: Box::new(qualifiers),
+				qualifiers,
 				return_types,
 				body: Box::new(body),
 			})
@@ -657,24 +486,34 @@ impl Parser {
 		}
 	}
 
-	fn parse_parameters(&mut self) -> Vec<(AstNode, AstNode, AstNode)> {
-		fn parameter1(p: &mut Parser) -> Option<(AstNode, AstNode, AstNode)> {
-			if p.peek_find(Token::any_identifier()) {
-				let var = AstNode::ident(p.bump().unwrap());
-				match var {
-					AstNode::Identifier(i) if i == "void" => return None,
-					_ => {}
-				}
-				let qualifiers = p.parse_qualifiers();
+	fn parse_parameters(&mut self) -> Vec<(Identifier, Qualifiers, Type)> {
+		fn parameter1(
+			p: &mut Parser,
+		) -> Option<(Identifier, Qualifiers, Type)> {
+			if p.peek_find(Token::any_ident()) {
+				// Parse an identifier for our parameter
+				let x = p.take();
+				println!("asd {:?}", x);
+				let ident = match x {
+					Token::Identifier(i) if i == "void" => return None,
+					i => i.into(),
+				};
+				// Parse any qualifiers
+				let qual = p.parse_qualifiers();
+				// Expect a colon before our type
 				p.expect(Token::Colon);
+				// Parse our type
 				let ty = p.parse_type();
-				Some((var, qualifiers, ty))
+				Some((ident, qual, ty))
+			// If we don't see an identifier we might have a varargs
 			} else if p.find(Token::Vararg) {
-				Some((AstNode::Nil, AstNode::Nil, AstNode::VarArgs))
+				Some((Identifier::nil(), Qualifiers::nil(), Type::varargs()))
+			// Otherwise we might have reference to self
 			} else if p.peek_find(Token::Pointer)
 				|| p.peek_find(Token::SelfType)
 			{
-				Some((AstNode::Nil, AstNode::Nil, p.parse_type()))
+				Some((Identifier::nil(), Qualifiers::nil(), p.parse_type()))
+			// If none of those work we don't have a parameter to parse
 			} else {
 				None
 			}
@@ -685,14 +524,14 @@ impl Parser {
 			None => return paramters,
 			Some(x) => paramters.push(x),
 		}
-		while self.find(Token::Comma) {
-			paramters.push(parameter1(self).unwrap());
-		}
+		self.sep_by(Token::Comma, |p| {
+			paramters.push(parameter1(p).unwrap());
+		});
 
 		paramters
 	}
 
-	fn parse_type(&mut self) -> AstNode {
+	fn parse_type(&mut self) -> Type {
 		fn pointer1(p: &mut Parser) -> PointerType {
 			if p.find(Token::Pointer) {
 				if p.find(Token::Const) {
@@ -706,16 +545,15 @@ impl Parser {
 		}
 		fn build_type(
 			ps: Vec<PointerType>,
-			base: AstNode,
-			array_size: Option<Box<AstNode>>,
-		) -> Box<AstNode> {
-			let b = Box::new(AstNode::Type {
+			base: Type,
+			array_size: Option<Box<Expr>>,
+		) -> Type {
+			let b = Type {
 				pointer: PointerType::None,
-				base_ty: Box::new(base),
+				base_ty: BaseType::Other(Box::new(base)),
 				array_size,
-			});
-			ps.iter()
-				.rfold(b, |b, &pt| AstNode::cons_pointer_type(pt, b))
+			};
+			ps.iter().rfold(b, |b, &pt| Type::cons_pointer_type(pt, b))
 		}
 		// Parse and store as many pointers as we can
 		let mut pointers = Vec::new();
@@ -727,84 +565,111 @@ impl Parser {
 			}
 			pointers.push(p);
 		}
-		// Parse either a base type or an array
+
+		// Try to parse an array
 		if self.find(Token::OpenBracket) {
-			let size = Box::new(self.parse_expr().unwrap());
+			// Parse the array size
+			let size = self.parse_expr().unwrap();
+			// Our type separator
 			self.expect(Token::SemiColon);
+			// Parse the array element type
 			let base = self.parse_type();
+			// The bracket should have a closing end
 			self.expect(Token::CloseBracket);
-			*build_type(pointers, base, Some(size))
-		} else if self.peek_find(Token::any_identifier()) {
+			build_type(pointers, base, Some(size))
+		// Try to parse an identifier as a base type
+		} else if self.peek_find(Token::any_ident()) {
 			let base = self.parse_symbol_path(false);
-			*build_type(pointers, base, None)
+			let ty = Type::from_base(BaseType::Ty(base));
+			build_type(pointers, ty, None)
+		// Try to parse a self type
 		} else if self.find(Token::SelfType) {
-			*build_type(pointers, AstNode::SelfType, None)
+			let ty = Type::from_base(BaseType::SelfType);
+			build_type(pointers, ty, None)
+		// Try to parse an anonymous structure
 		} else if [Token::Struct, Token::Union, Token::Enum]
 			.into_iter()
 			.any(|q| self.peek_find(q))
 		{
 			let struc = self.parse_structure(true).unwrap();
-			*build_type(pointers, struc, None)
+			let ty = Type::from_base(BaseType::AnonStructure(struc));
+			build_type(pointers, ty, None)
+		// We couldn't parse a type
 		} else {
 			panic!("unexpected token in type: {:?}", self.bump());
 		}
 	}
 
-	fn parse_statement(&mut self) -> Option<AstNode> {
+	fn parse_statement(&mut self, global_ctx: bool) -> Option<Stmt> {
 		// Try to parse a use declaration
 		let node = self.parse_use_decl();
 		if node.is_some() {
 			return node;
 		}
-		// Try to parse a return statement
-		let node = self.parse_return();
+		// Try and parse a structure definition
+		let node = self.parse_structure(false);
 		if node.is_some() {
-			return node;
-		}
-		// Try to parse a control structure
-		let node = self.parse_control();
-		if node.is_some() {
-			return node;
+			return Some(Stmt::Structure(node.unwrap()));
 		}
 		// Try to parse a variable declaration
 		let node = self.parse_variable();
 		if node.is_some() {
 			return node;
 		}
-		// Try to parse a compound statement block
-		if self.peek_find(Token::OpenBrace) {
-			return Some(self.parse_compound_statement());
-		}
-		// Try to parse an expression
-		let node = self.parse_expr();
-		if node.is_some() {
-			self.expect(Token::SemiColon);
-			return node;
+		if global_ctx {
+			// Try to parse a function declaration
+			let node = self.parse_function();
+			if node.is_some() {
+				return node.map(Stmt::Function);
+			}
 		}
 		// Try to parse spare semicolons
 		if self.find(Token::SemiColon) {
-			return self.parse_statement();
+			return self.parse_statement(global_ctx);
+		}
+
+		if !global_ctx {
+			// Try to parse a return statement
+			let node = self.parse_return();
+			if node.is_some() {
+				return node;
+			}
+			// Try to parse a control structure
+			let node = self.parse_control();
+			if node.is_some() {
+				return node;
+			}
+			// Try to parse a compound statement block
+			if self.peek_find(Token::OpenBrace) {
+				return Some(self.parse_compound_statement());
+			}
+			// Try to parse an expression
+			let node = self.parse_expr();
+			if node.is_some() {
+				self.expect(Token::SemiColon);
+				return Some(Stmt::Expression(node.unwrap()));
+			}
 		}
 
 		// Otherwise we have an empty statement
 		None
 	}
 
-	fn parse_compound_statement(&mut self) -> AstNode {
+	fn parse_compound_statement(&mut self) -> Stmt {
 		self.expect(Token::OpenBrace);
 		let mut block = Vec::new();
 		loop {
-			let stmt = self.parse_statement();
+			let stmt = self.parse_statement(false);
 			match stmt {
 				Some(x) => block.push(x),
 				None => break,
 			}
 		}
 		self.expect(Token::CloseBrace);
-		AstNode::Block(block)
+		Stmt::Block(block)
 	}
 
-	fn parse_return(&mut self) -> Option<AstNode> {
+	fn parse_return(&mut self) -> Option<Stmt> {
 		if self.find(Token::Ret) {
 			let mut exprs = Vec::new();
 			loop {
@@ -817,32 +682,19 @@ impl Parser {
 				}
 			}
 			self.expect(Token::SemiColon);
-			Some(AstNode::Return(exprs))
+			Some(Stmt::Return(exprs))
 		} else {
 			None
 		}
 	}
 
-	fn parse_control(&mut self) -> Option<AstNode> {
-		fn parse_if(p: &mut Parser) -> AstNode {
+	fn parse_control(&mut self) -> Option<Stmt> {
+		fn parse_if(p: &mut Parser) -> Stmt {
 			p.expect(Token::OpenParen);
-			let (precond, cond) = {
-				let mut precond = None;
-				let cond;
-
-				// Try to parse a variable decl and condition
-				let c1 = p.parse_variable();
-				if c1.is_some() {
-					precond = Some(Box::new(c1.unwrap()));
-					cond = p.parse_expr().unwrap();
-				// If we can't just parse the condition
-				} else {
-					cond = p.parse_expr().unwrap();
-				}
-				(precond, Box::new(cond))
-			};
+			let precond = p.parse_variable().map(Box::new);
+			let cond = Some(p.parse_expr().unwrap_or(Expr::false_val()));
 			p.expect(Token::CloseParen);
-			let block = p.parse_statement().unwrap();
+			let true_body = Box::new(p.parse_statement(false).unwrap());
 			let else_body = if p.peek_find(Token::Else) {
 				let mut block = Vec::new();
 				if p.peek_two().is_some()
@@ -852,38 +704,47 @@ impl Parser {
 					block.push(parse_if(p));
 				} else {
 					p.bump();
-					block.push(p.parse_statement().unwrap());
+					block.push(p.parse_statement(false).unwrap());
 				}
-				Some(Box::new(AstNode::Block(block)))
+				Some(Box::new(Stmt::Block(block)))
 			} else {
 				None
 			};
 
-			AstNode::If {
+			Stmt::If {
 				precond,
 				cond,
-				body: Box::new(block),
+				true_body,
 				else_body,
 			}
 		}
 
-		fn parse_case(p: &mut Parser) -> Option<AstNode> {
+		fn parse_case(p: &mut Parser) -> Option<(bool, Case)> {
 			match p.peek_one() {
 				Some(Token::Case) => {
 					p.bump();
 					let expr = p.parse_expr().unwrap();
 					p.expect(Token::Arrow);
-					let body = p.parse_statement().unwrap();
-					Some(AstNode::Case {
-						value: Box::new(expr),
-						body: Box::new(body),
-					})
+					let body = p.parse_statement(false).unwrap();
+					Some((
+						false,
+						Case {
+							value: expr,
+							body: Box::new(body),
+						},
+					))
 				}
 				Some(Token::Default) => {
 					p.bump();
 					p.expect(Token::Arrow);
-					let body = p.parse_statement().unwrap();
-					Some(AstNode::Default(Box::new(body)))
+					let body = p.parse_statement(false).unwrap();
+					Some((
+						true,
+						Case {
+							value: Expr::true_val(),
+							body: Box::new(body),
+						},
+					))
 				}
 				_ => None,
 			}
@@ -897,36 +758,38 @@ impl Parser {
 			Some(Token::For) => {
 				self.bump();
 				self.expect(Token::OpenParen);
-				let mut s1;
-				s1 = self.parse_variable();
-				if s1.is_none() {
-					s1 = self.parse_expr();
-					if s1.is_some() {
+				let initial_var = self.parse_variable().map(Stmt::into_var).map(Box::new);
+				let mut initial = None;
+				if initial_var.is_none() {
+					initial = self.parse_expr();
+					if initial.is_some() {
 						self.expect(Token::SemiColon);
 					}
 				}
-				let s2 = self.parse_expr().unwrap_or(AstNode::Boolean(true));
+				let check = self.parse_expr().unwrap_or(Expr::true_val());
 				self.expect(Token::SemiColon);
-				let s3 = self.parse_expr();
+				let update = self.parse_expr();
 				self.expect(Token::CloseParen);
-				let body = self.parse_statement().unwrap();
-				Some(AstNode::For {
-					cond: Box::new((s1, s2, s3)),
-					body: Box::new(body),
+				let body = Box::new(self.parse_statement(false).unwrap());
+				Some(Stmt::For {
+					initial, initial_var,
+					check,
+					update,
+					body,
 				})
 			}
 			Some(Token::Do) => {
 				self.bump();
-				let body = self.parse_statement().unwrap();
+				let body = self.parse_statement(false).unwrap();
 				self.expect(Token::While);
 				self.expect(Token::OpenParen);
 				let cond = self.parse_expr().unwrap();
 				self.expect(Token::CloseParen);
 				self.expect(Token::SemiColon);
 
-				Some(AstNode::DoWhile {
+				Some(Stmt::DoWhile {
 					body: Box::new(body),
-					cond: Box::new(cond),
+					cond,
 				})
 			}
 			Some(Token::While) => {
@@ -934,53 +797,56 @@ impl Parser {
 				self.expect(Token::OpenParen);
 				let cond = self.parse_expr().unwrap();
 				self.expect(Token::CloseParen);
-				let body = self.parse_statement().unwrap();
+				let body = self.parse_statement(false).unwrap();
 
-				Some(AstNode::While {
-					cond: Box::new(cond),
+				Some(Stmt::While {
+					cond: cond,
 					body: Box::new(body),
 				})
 			}
 			Some(Token::Loop) => {
 				self.bump();
-				Some(AstNode::Loop(Box::new(self.parse_statement().unwrap())))
+				Some(Stmt::Loop(Box::new(self.parse_statement(false).unwrap())))
 			}
 			Some(Token::Defer) => {
 				self.bump();
-				Some(AstNode::Defer(Box::new(self.parse_statement().unwrap())))
+				Some(Stmt::Defer(Box::new(self.parse_statement(false).unwrap())))
 			}
 			Some(Token::Switch) => {
 				self.bump();
 				self.expect(Token::OpenParen);
-				let value = self.parse_expr().unwrap();
+				let cond = self.parse_expr().unwrap();
 				self.expect(Token::CloseParen);
 				self.expect(Token::OpenBrace);
 				let mut cases = Vec::new();
+				let mut default = None;
 				loop {
 					match parse_case(self) {
-						Some(x) => cases.push(x),
+						Some((false, x)) => cases.push(x),
+						Some((true, x)) => default = Some(x),
 						None => break,
 					}
 				}
 				self.expect(Token::CloseBrace);
-				Some(AstNode::Switch {
-					value: Box::new(value),
+				Some(Stmt::Switch {
+					cond,
 					cases,
+					default,
 				})
 			}
 			Some(Token::Break) => {
 				self.bump();
-				Some(AstNode::Break)
+				Some(Stmt::Break)
 			}
 			Some(Token::Continue) => {
 				self.bump();
-				Some(AstNode::Continue)
+				Some(Stmt::Continue)
 			}
 			_ => None,
 		}
 	}
 
-	fn parse_qualifiers(&mut self) -> AstNode {
+	fn parse_qualifiers(&mut self) -> Qualifiers {
 		fn qualifier1(p: &mut Parser) -> Option<Qualifier> {
 			if [
 				Token::Priv,
@@ -992,11 +858,11 @@ impl Parser {
 			.into_iter()
 			.any(|q| p.peek_find(q))
 			{
-				Some(Qualifier::from_token(p.bump().unwrap()))
+				Some(Qualifier::from_token(p.take()))
 			} else if p.find(Token::Align) {
 				p.expect(Token::OpenParen);
 				let q = match p.parse_expr() {
-					Some(e) => Qualifier::Align(Box::new(e)),
+					Some(e) => Qualifier::Align(e),
 					None => panic!(
 						"cannot have an align statement without an align value"
 					),
@@ -1015,17 +881,16 @@ impl Parser {
 				None => break,
 			}
 		}
-		AstNode::Qualifiers(qualifiers)
+		qualifiers.into()
 	}
 
-	fn parse_variable(&mut self) -> Option<AstNode> {
-		fn parse_definition(p: &mut Parser) -> Option<AstNode> {
-			if p.peek_find(Token::any_identifier()) {
+	fn parse_variable(&mut self) -> Option<Stmt> {
+		fn parse_definition(p: &mut Parser) -> Option<Variable> {
+			if p.peek_find(Token::any_ident()) {
 				// Check to see if this is actually a variable and not an
 				// expression
-				let peek_two = p.peek_two();
-				if peek_two.is_some() {
-					let peek_two = &peek_two.unwrap();
+				if p.peek_two().is_some() {
+					let peek_two = &p.peek_two().unwrap();
 					// Check if a possible qualifier or a colon
 					if ![
 						Token::Priv,
@@ -1042,36 +907,45 @@ impl Parser {
 						return None;
 					}
 				}
-				let var = AstNode::ident(p.expect(Token::any_identifier()));
+				// Parse the variable name
+				let ident = p.take().into();
+				// Parse an qualifiers
 				let qualifiers = p.parse_qualifiers();
+				// Parse the required type colon
 				p.expect(Token::Colon);
+				// If there is no `=` or `,` we have neither an expression or
+				// another variable, we must try to parse a type
 				let ty = if !p.peek_find(Token::Equal)
 					&& !p.peek_find(Token::Comma)
 				{
-					Some(Box::new(p.parse_type()))
+					Some(p.parse_type())
 				} else {
 					None
 				};
-				Some(AstNode::Variable {
-					identifier: Box::new(var),
-					qualifiers: Box::new(qualifiers),
+				// Return our variable for now, don't set an initial value yet
+				Some(Variable {
+					ident,
+					qualifiers,
 					ty,
-					initial: None,
+					initial_val: None,
 				})
 			} else {
 				None
 			}
 		}
+		// Try to parse as many variable declarations as we can
 		let mut vars = Vec::new();
 		vars.push(parse_definition(self)?);
-		while self.find(Token::Comma) {
-			vars.push(parse_definition(self).unwrap());
-		}
+		self.sep_by(Token::Comma, |p| {
+			vars.push(parse_definition(p).unwrap());
+		});
+		// If we only found 1 variable, it's just a normal variable
 		if vars.len() == 1 {
+			// See and parse an initial value if there is one
 			let initial = if self.find(Token::Equal) {
 				let expr = self.parse_expr();
 				match expr {
-					Some(expr) => Some(Box::new(expr)),
+					Some(expr) => Some(expr),
 					None => panic!(
 						"expected expression following after `=' in variable \
 						 declaration, found token: {:?}",
@@ -1081,134 +955,148 @@ impl Parser {
 			} else {
 				None
 			};
+			// Variable must be followed by a semicolon
 			self.expect(Token::SemiColon);
-			vars[0].set_var_initial(initial);
-			Some(vars.pop().unwrap())
+			vars[0].initial_val = initial;
+			Some(Stmt::Var(vars.pop().unwrap()))
+		// Otherwise if we find multiple this is a multiple return value
 		} else {
+			// We must have initial value for a multiple return value
 			self.expect(Token::Equal);
 			let initial = match self.parse_expr() {
-				Some(initial) => Box::new(initial),
+				Some(initial) => initial,
 				None => panic!(
 					"expected expression following after `=' in variable \
 					 declaration, found token: {:?}",
 					self.bump()
 				),
 			};
+			// Variable must be followed by a semicolon
 			self.expect(Token::SemiColon);
-			Some(AstNode::MultipleRetVariable { vars, initial })
+			Some(Stmt::RetVar(MultiRetVariable {
+				bindings: vars,
+				initial,
+			}))
 		}
 	}
 
-	fn parse_arguments(&mut self) -> AstNode {
+	fn parse_arguments(&mut self) -> Box<Expr> {
 		let mut args = Vec::new();
 		match self.parse_expr() {
 			Some(e) => args.push(e),
-			None => return AstNode::Arguments(args),
+			None => return Box::new(Expr::Arguments(args)),
 		}
-		while self.find(Token::Comma) {
-			match self.parse_expr() {
-				Some(e) => args.push(e),
-				None => panic!(
-					"expected expression for argument but found: {:?}",
-					self.bump()
-				),
-			}
-		}
-		AstNode::Arguments(args)
+		self.sep_by(Token::Comma, |p| match p.parse_expr() {
+			Some(e) => args.push(e),
+			None => panic!(
+				"expected expression for argument but found: {:?}",
+				p.bump()
+			),
+		});
+		Box::new(Expr::Arguments(args))
 	}
 
-	// StructLiteral(Vec<(Option<AstNode>, AstNode)>),
-
-	fn parse_struct_lit(&mut self) -> AstNode {
-		fn parse_key(p: &mut Parser) -> AstNode {
-			if p.peek_find(Token::any_identifier()) {
-				AstNode::ident(p.bump().unwrap())
-			} else if p.peek_find(Token::any_integer()) {
-				match p.expect(Token::any_integer()) {
+	fn parse_struct_lit(&mut self) -> Box<Expr> {
+		// Try to parse the `.x` part of a struct lit key
+		fn parse_key(p: &mut Parser) -> Box<Expr> {
+			// If we index with an identifier
+			let expr = if p.peek_find(Token::any_ident()) {
+				Expr::Ident(p.take().into())
+			// If we index with an integer
+			} else if p.peek_find(Token::any_int()) {
+				match p.take() {
 					Token::IntegerLit { value, suffix } => {
-						AstNode::Integer(value, suffix)
+						Expr::IntLit(value, suffix)
 					}
 					_ => unreachable!(),
 				}
-			} else if p.peek_find(Token::any_character()) {
-				match p.expect(Token::any_character()) {
-					Token::CharacterLit(s) => AstNode::Character(s),
+			// If we index with a character
+			} else if p.peek_find(Token::any_char()) {
+				match p.take() {
+					Token::CharacterLit(c) => Expr::CharLit(c),
 					_ => unreachable!(),
 				}
 			} else {
 				panic!("invalid token for struct literal key: {:?}", p.bump());
-			}
+			};
+			Box::new(expr)
 		}
-		fn item1(p: &mut Parser) -> (Option<AstNode>, AstNode) {
+		// Try to parse a single item of the struct
+		fn item1(p: &mut Parser) -> (Option<Box<Expr>>, Box<Expr>) {
+			// If there is a `.` we must have a key
 			let key = if p.find(Token::Dot) {
 				let k = Some(parse_key(p));
+				// After the key there must be a `=`
 				p.expect(Token::Equal);
 				k
 			} else {
 				None
 			};
+			// Parse our value
 			let value = p.parse_expr().unwrap();
 			(key, value)
 		}
 		// Special case for empty struct literal
 		if self.find(Token::CloseBrace) {
-			return AstNode::StructLiteral(Vec::new());
+			return Box::new(Expr::StructLit(Vec::new()));
 		}
+		// Parse as many items as we can
 		let mut items = Vec::new();
 		items.push(item1(self));
-		while self.find(Token::Comma) {
-			items.push(item1(self));
-		}
+		self.sep_by(Token::Comma, |p| {
+			items.push(item1(p));
+		});
+
 		self.expect(Token::CloseBrace);
-		AstNode::StructLiteral(items)
+		Box::new(Expr::StructLit(items))
 	}
 
-	fn expression_base(&mut self) -> Option<AstNode> {
+	fn expression_base(&mut self) -> Option<Box<Expr>> {
 		// Try to parse an identifier or a path
-		if self.peek_find(Token::any_identifier()) || self.peek_find(Token::Dot)
-		{
-			Some(self.parse_symbol_path(false))
+		let expr = if self.peek_find(Token::any_ident()) {
+			Expr::Ident(self.take().into())
 		// Try to parse an integer literal
-		} else if self.peek_find(Token::any_integer()) {
-			match self.expect(Token::any_integer()) {
+		} else if self.peek_find(Token::any_int()) {
+			match self.take() {
 				Token::IntegerLit { value, suffix } => {
-					Some(AstNode::Integer(value, suffix))
+					Expr::IntLit(value, suffix)
 				}
 				_ => unreachable!(),
 			}
 		// Try to parse a string
-		} else if self.peek_find(Token::any_string()) {
-			match self.expect(Token::any_string()) {
-				Token::StringLit(s) => Some(AstNode::String(s)),
+		} else if self.peek_find(Token::any_str()) {
+			match self.take() {
+				Token::StringLit(s) => Expr::StrLit(s),
 				_ => unreachable!(),
 			}
 		// Try to parse a character
-		} else if self.peek_find(Token::any_character()) {
-			match self.expect(Token::any_character()) {
-				Token::CharacterLit(s) => Some(AstNode::Character(s)),
+		} else if self.peek_find(Token::any_char()) {
+			match self.take() {
+				Token::CharacterLit(s) => Expr::CharLit(s),
 				_ => unreachable!(),
 			}
 		// Try to parse a true boolean
 		} else if self.find(Token::True) {
-			Some(AstNode::Boolean(true))
+			Expr::BoolLit(true)
 		// Try to parse a false boolean
 		} else if self.find(Token::False) {
-			Some(AstNode::Boolean(false))
+			Expr::BoolLit(false)
 		// Try to parse a null value
 		} else if self.find(Token::Null) {
-			Some(AstNode::Null)
+			Expr::NullVal
 		// Try to parse a reference to self
 		} else if self.find(Token::SelfType) {
-			Some(AstNode::SelfValue)
+			Expr::SelfVal
 		// Try to parse a structure literal
 		} else if self.find(Token::OpenBrace) {
-			Some(self.parse_struct_lit())
+			return Some(self.parse_struct_lit());
 		} else {
-			None
-		}
+			return None;
+		};
+		Some(Box::new(expr))
 	}
 
-	fn expr_bp(&mut self, min_bp: u8) -> Option<AstNode> {
+	fn expr_bp(&mut self, min_bp: u8) -> Option<Box<Expr>> {
 		// Check to see that the next token isn't an EOF
 		let peeked = self.peek_one()?.clone();
 		// Try to parse a prefix operator
@@ -1224,7 +1112,7 @@ impl Parser {
 				self.expect(Token::CloseParen);
 				// parse value of cast
 				let rhs = self.expr_bp(r_bp).unwrap();
-				AstNode::binop(peeked, lhs, rhs)
+				Expr::cast(peeked, lhs, rhs)
 			} else {
 				let rhs = match self.expr_bp(r_bp) {
 					Some(x) => x,
@@ -1233,7 +1121,7 @@ impl Parser {
 						peeked
 					),
 				};
-				AstNode::unaryop(peeked, rhs)
+				Expr::unaryop(peeked, rhs)
 			}
 
 		// Try to pass a bracketed expression
@@ -1270,7 +1158,7 @@ impl Parser {
 				if op.is_equivalent(&Token::OpenParen) {
 					let rhs = self.parse_arguments();
 					self.expect(Token::CloseParen);
-					lhs = AstNode::binop(op, lhs, rhs);
+					lhs = Expr::binop(op, lhs, rhs);
 				// Check to see if we have a index
 				} else if op.is_equivalent(&Token::OpenBracket) {
 					let rhs = match self.expr_bp(0) {
@@ -1281,10 +1169,10 @@ impl Parser {
 						),
 					};
 					self.expect(Token::CloseBracket);
-					lhs = AstNode::binop(op, lhs, rhs);
+					lhs = Expr::binop(op, lhs, rhs);
 				// Otherwise we have a normal postfix operator
 				} else {
-					lhs = AstNode::unaryop(op, lhs);
+					lhs = Expr::unaryop(op, lhs);
 				}
 				continue;
 			}
@@ -1304,7 +1192,7 @@ impl Parser {
 					}
 				};
 
-				lhs = AstNode::binop(op, lhs, rhs);
+				lhs = Expr::binop(op, lhs, rhs);
 				continue;
 			}
 			break;
@@ -1313,7 +1201,7 @@ impl Parser {
 		Some(lhs)
 	}
 
-	fn parse_expr(&mut self) -> Option<AstNode> {
+	fn parse_expr(&mut self) -> Option<Box<Expr>> {
 		self.expr_bp(0)
 	}
 }
@@ -1355,7 +1243,7 @@ fn postfix_binding_power(op: &Token) -> Option<(u8, ())> {
 	}
 }
 
-pub fn parse(tokens: Vec<Token>) -> AstNode {
+pub fn parse(tokens: Vec<Token>) -> Unit {
 	let parser = Parser::new(tokens);
 	parser.parse_unit()
 }
