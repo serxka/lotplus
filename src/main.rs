@@ -1,3 +1,4 @@
+#[macro_use]
 mod ast;
 mod lexer;
 mod parser;
@@ -12,6 +13,7 @@ fn main() {
 			.filter(|c| !c.is_whitespace())
 			.collect::<Vec<_>>();
 		let tree = parser::parse(tokens);
-		println!("{:#?}", tree);
+		let unit = sema::ScopeEnviroment::scope_unit(tree);
+		eprintln!("{:#?}", unit);
 	}
 }

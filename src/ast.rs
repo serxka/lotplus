@@ -1,26 +1,42 @@
+use std::rc::Rc;
+use std::collections::HashMap;
+
 use crate::lexer::{IntegerSuffix, Token};
 
-#[derive(Debug)]
-pub struct Identifier(String);
+pub trait Map {
+	fn map_unit(&mut self, u: Unit) -> Unit;
+	fn map_path(&mut self, p: Path) -> Path;
+	fn map_stmt(&mut self, s: Stmt) -> Stmt;
+	fn map_expr(&mut self, e: Expr) -> Expr;
+	fn map_type(&mut self, t: Type) -> Type;
+	fn map_struc(&mut self, s: Structure) -> Structure;
+}
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub struct Identifier {
+	name: String,
+	ty: Option<Rc<Type>>
+}
+
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Qualifiers(Vec<Qualifier>);
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Path {
 	pub absolute: bool,
 	pub base: Vec<Identifier>,
 	pub group: Vec<Identifier>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Unit {
 	pub module: Path,
 	pub imports: Vec<Path>,
 	pub statements: Vec<Stmt>,
+	pub env: Rc<Env>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Stmt {
 	UseDecl(Path),
 	Function(Function),
@@ -29,40 +45,40 @@ pub enum Stmt {
 	Structure(Structure),
 	If {
 		precond: Option<Box<Stmt>>,
-		cond: Option<Box<Expr>>,
+		cond: Option<Rc<Expr>>,
 		true_body: Box<Stmt>,
 		else_body: Option<Box<Stmt>>,
 	},
 	For {
-		initial: Option<Box<Expr>>,
+		initial: Option<Rc<Expr>>,
 		initial_var: Option<Box<Variable>>,
-		check: Box<Expr>,
-		update: Option<Box<Expr>>,
+		check: Rc<Expr>,
+		update: Option<Rc<Expr>>,
 		body: Box<Stmt>,
 	},
 	DoWhile {
 		body: Box<Stmt>,
-		cond: Box<Expr>,
+		cond: Rc<Expr>,
 	},
 	While {
-		cond: Box<Expr>,
+		cond: Rc<Expr>,
 		body: Box<Stmt>,
 	},
 	Switch {
-		cond: Box<Expr>,
+		cond: Rc<Expr>,
 		cases: Vec<Case>,
 		default: Option<Case>,
 	},
 	Loop(Box<Stmt>),
 	Defer(Box<Stmt>),
-	Return(Vec<Box<Expr>>),
+	Return(Vec<Rc<Expr>>),
 	Break,
 	Continue,
-	Expression(Box<Expr>),
+	Expression(Rc<Expr>),
 	Block(Vec<Stmt>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Function {
 	pub ident: Identifier,
 	pub parameters: Vec<(Identifier, Qualifiers, Type)>,
@@ -71,21 +87,21 @@ pub struct Function {
 	pub body: Box<Stmt>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Variable {
 	pub ident: Identifier,
 	pub qualifiers: Qualifiers,
 	pub ty: Option<Type>,
-	pub initial_val: Option<Box<Expr>>,
+	pub initial_val: Option<Rc<Expr>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct MultiRetVariable {
 	pub bindings: Vec<Variable>,
-	pub initial: Box<Expr>,
+	pub initial: Rc<Expr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Expr {
 	Ident(Identifier),
 	IntLit(u128, IntegerSuffix),
@@ -94,14 +110,14 @@ pub enum Expr {
 	BoolLit(bool),
 	SelfVal,
 	NullVal,
-	StructLit(Vec<(Option<Box<Expr>>, Box<Expr>)>),
-	Arguments(Vec<Box<Expr>>),
-	BinOp(BinOp, Box<Expr>, Box<Expr>),
-	Cast(BinOp, Type, Box<Expr>),
-	UnaryOp(UnaryOp, Box<Expr>),
+	StructLit(Vec<(Option<Rc<Expr>>, Rc<Expr>)>),
+	Arguments(Vec<Rc<Expr>>),
+	BinOp(BinOp, Rc<Expr>, Rc<Expr>),
+	Cast(BinOp, Type, Rc<Expr>),
+	UnaryOp(UnaryOp, Rc<Expr>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum BaseType {
 	Ty(Path),
 	Other(Box<Type>),
@@ -110,27 +126,27 @@ pub enum BaseType {
 	AnonStructure(Structure),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Type {
 	pub pointer: PointerType,
 	pub base_ty: BaseType,
-	pub array_size: Option<Box<Expr>>,
+	pub array_size: Option<Rc<Expr>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Case {
-	pub value: Box<Expr>,
+	pub value: Rc<Expr>,
 	pub body: Box<Stmt>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Structure {
 	Struct(Struct),
 	Union(Union),
 	Enum(Enum),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Struct {
 	pub ident: Identifier,
 	pub qualifiers: Qualifiers,
@@ -138,7 +154,7 @@ pub struct Struct {
 	pub body: Option<Box<Stmt>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Union {
 	pub ident: Identifier,
 	pub qualifiers: Qualifiers,
@@ -146,32 +162,32 @@ pub struct Union {
 	pub body: Option<Box<Stmt>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Enum {
 	pub ident: Identifier,
 	pub qualifiers: Qualifiers,
-	pub elements: Vec<(Identifier, Option<Box<Expr>>)>,
+	pub elements: Vec<(Identifier, Option<Rc<Expr>>)>,
 	pub body: Option<Box<Stmt>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PointerType {
 	None,
 	MutPointer,
 	ConstPointer,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Qualifier {
 	Private,
 	Constant,
 	Volatile,
 	CompileTime,
-	Align(Box<Expr>),
+	Align(Rc<Expr>),
 	NoReturn,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum BinOp {
 	Add,
 	Subtract,
@@ -204,7 +220,7 @@ pub enum BinOp {
 	NotEqual,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum UnaryOp {
 	Positive,
 	Negative,
@@ -246,15 +262,15 @@ impl std::convert::From<Vec<Qualifier>> for Qualifiers {
 
 impl Identifier {
 	pub fn from(ident: String) -> Identifier {
-		Identifier(ident)
+		Identifier { name: ident, ty: None }
 	}
 
 	pub const fn nil() -> Identifier {
-		Identifier(String::new())
+		Identifier { name: String::new(), ty: None }
 	}
 
 	pub fn as_str(&self) -> &str {
-		&self.0
+		&self.name
 	}
 }
 
@@ -278,6 +294,38 @@ impl Path {
 			group: Vec::new(),
 		}
 	}
+	
+	pub fn new() -> Path {
+		Path {
+			absolute: false,
+			base: Vec::new(),
+			group: Vec::new(),
+		}
+	}
+	
+	pub fn push(&mut self, path: &str) {
+		self.base.push(Identifier::from(path.into()))
+	}
+	
+	pub fn push_group(&mut self, path: &str) {
+		self.group.push(Identifier::from(path.into()))
+	}
+}
+
+#[macro_export]
+macro_rules! path {
+    () => (
+        $crate::__rust_force_expr!($crate::ast::Path::new())
+    );
+    ($($x:expr),+ $(,)?) => (
+        {
+        	let mut path = $crate::ast::Path::new();
+        	$(
+        		path.push($x);
+        	),+
+        	path
+        }
+    );
 }
 
 impl Stmt {
@@ -290,7 +338,7 @@ impl Stmt {
 }
 
 impl Expr {
-	pub fn binop(op: Token, lhs: Box<Expr>, rhs: Box<Expr>) -> Box<Expr> {
+	pub fn binop(op: Token, lhs: Rc<Expr>, rhs: Rc<Expr>) -> Rc<Expr> {
 		let op = match op {
 			Token::Plus => BinOp::Add,
 			Token::Minus => BinOp::Subtract,
@@ -321,10 +369,10 @@ impl Expr {
 			Token::NotEqual => BinOp::NotEqual,
 			_ => panic!("invalid binary operator token: {:?}", op),
 		};
-		Box::new(Expr::BinOp(op, lhs, rhs))
+		Rc::new(Expr::BinOp(op, lhs, rhs))
 	}
 
-	pub fn unaryop(op: Token, lhs: Box<Expr>) -> Box<Expr> {
+	pub fn unaryop(op: Token, lhs: Rc<Expr>) -> Rc<Expr> {
 		let op = match op {
 			Token::Plus => UnaryOp::Positive,
 			Token::Minus => UnaryOp::Negative,
@@ -338,24 +386,24 @@ impl Expr {
 			Token::Ref => UnaryOp::Reference,
 			_ => panic!("invalid unary operator token: {:?}", op),
 		};
-		Box::new(Expr::UnaryOp(op, lhs))
+		Rc::new(Expr::UnaryOp(op, lhs))
 	}
 
-	pub fn cast(op: Token, ty: Type, rhs: Box<Expr>) -> Box<Expr> {
+	pub fn cast(op: Token, ty: Type, rhs: Rc<Expr>) -> Rc<Expr> {
 		let op = match op {
 			Token::Cast => BinOp::Cast,
 			Token::Bit => BinOp::BitCast,
 			_ => panic!("invalid cast operator token: {:?}", op),
 		};
-		Box::new(Expr::Cast(op, ty, rhs))
+		Rc::new(Expr::Cast(op, ty, rhs))
 	}
 
-	pub fn true_val() -> Box<Expr> {
-		Box::new(Expr::BoolLit(true))
+	pub fn true_val() -> Rc<Expr> {
+		Rc::new(Expr::BoolLit(true))
 	}
 	
-	pub fn false_val() -> Box<Expr> {
-		Box::new(Expr::BoolLit(false))
+	pub fn false_val() -> Rc<Expr> {
+		Rc::new(Expr::BoolLit(false))
 	}
 }
 
@@ -403,5 +451,43 @@ impl Type {
 				array_size: None,
 			}
 		}
+	}
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Env {
+	table: HashMap<String, (Identifier, Rc<Expr>)>,
+	types: HashMap<Path, Type>,
+	prev: Option<Rc<Env>>,
+}
+
+impl Env {
+	pub fn new() -> Self {
+		Env {
+			table: HashMap::new(),
+			types: HashMap::new(),
+			prev: None,
+		}
+	}
+
+	pub fn parent(prev: Rc<Env>) -> Self {
+		Env {
+			table: HashMap::new(),
+			types: HashMap::new(),
+			prev: Some(prev),
+		}
+	}
+
+	pub fn get(&self, id: &str) -> Option<&(Identifier, Rc<Expr>)> {
+		let v = self.table.get(id);
+		if v.is_none() && self.prev.is_some() {
+			self.prev.as_ref().unwrap().get(id)
+		} else {
+			v
+		}
+	}
+
+	pub fn set(&mut self, id: Identifier, expr: Rc<Expr>) {
+		self.table.insert(id.as_str().to_owned(), (id, expr));
 	}
 }

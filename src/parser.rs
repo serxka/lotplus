@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::ast::*;
 use crate::lexer::Token;
 
@@ -195,10 +197,11 @@ impl Parser {
 			module,
 			imports,
 			statements,
+			env: Rc::new(Env::new()),
 		}
 	}
 
-	fn parse_symbol_path(&mut self, grouping: bool) -> Path {
+	pub fn parse_symbol_path(&mut self, grouping: bool) -> Path {
 		// Is it an absolute path?
 		let absolute = self.find(Token::Dot);
 		let mut base = Vec::new();
@@ -304,9 +307,9 @@ impl Parser {
 		fields
 	}
 
-	fn parse_elements(&mut self) -> Vec<(Identifier, Option<Box<Expr>>)> {
+	fn parse_elements(&mut self) -> Vec<(Identifier, Option<Rc<Expr>>)> {
 		// Parse a single field of the enum
-		fn element1(p: &mut Parser) -> Option<(Identifier, Option<Box<Expr>>)> {
+		fn element1(p: &mut Parser) -> Option<(Identifier, Option<Rc<Expr>>)> {
 			if p.peek_find(Token::any_ident()) {
 				// Parse enum variant
 				let variant = p.take().into();
@@ -493,7 +496,6 @@ impl Parser {
 			if p.peek_find(Token::any_ident()) {
 				// Parse an identifier for our parameter
 				let x = p.take();
-				println!("asd {:?}", x);
 				let ident = match x {
 					Token::Identifier(i) if i == "void" => return None,
 					i => i.into(),
@@ -546,7 +548,7 @@ impl Parser {
 		fn build_type(
 			ps: Vec<PointerType>,
 			base: Type,
-			array_size: Option<Box<Expr>>,
+			array_size: Option<Rc<Expr>>,
 		) -> Type {
 			let b = Type {
 				pointer: PointerType::None,
@@ -980,11 +982,11 @@ impl Parser {
 		}
 	}
 
-	fn parse_arguments(&mut self) -> Box<Expr> {
+	fn parse_arguments(&mut self) -> Rc<Expr> {
 		let mut args = Vec::new();
 		match self.parse_expr() {
 			Some(e) => args.push(e),
-			None => return Box::new(Expr::Arguments(args)),
+			None => return Rc::new(Expr::Arguments(args)),
 		}
 		self.sep_by(Token::Comma, |p| match p.parse_expr() {
 			Some(e) => args.push(e),
@@ -993,12 +995,12 @@ impl Parser {
 				p.bump()
 			),
 		});
-		Box::new(Expr::Arguments(args))
+		Rc::new(Expr::Arguments(args))
 	}
 
-	fn parse_struct_lit(&mut self) -> Box<Expr> {
+	fn parse_struct_lit(&mut self) -> Rc<Expr> {
 		// Try to parse the `.x` part of a struct lit key
-		fn parse_key(p: &mut Parser) -> Box<Expr> {
+		fn parse_key(p: &mut Parser) -> Rc<Expr> {
 			// If we index with an identifier
 			let expr = if p.peek_find(Token::any_ident()) {
 				Expr::Ident(p.take().into())
@@ -1019,10 +1021,10 @@ impl Parser {
 			} else {
 				panic!("invalid token for struct literal key: {:?}", p.bump());
 			};
-			Box::new(expr)
+			Rc::new(expr)
 		}
 		// Try to parse a single item of the struct
-		fn item1(p: &mut Parser) -> (Option<Box<Expr>>, Box<Expr>) {
+		fn item1(p: &mut Parser) -> (Option<Rc<Expr>>, Rc<Expr>) {
 			// If there is a `.` we must have a key
 			let key = if p.find(Token::Dot) {
 				let k = Some(parse_key(p));
@@ -1038,7 +1040,7 @@ impl Parser {
 		}
 		// Special case for empty struct literal
 		if self.find(Token::CloseBrace) {
-			return Box::new(Expr::StructLit(Vec::new()));
+			return Rc::new(Expr::StructLit(Vec::new()));
 		}
 		// Parse as many items as we can
 		let mut items = Vec::new();
@@ -1048,10 +1050,10 @@ impl Parser {
 		});
 
 		self.expect(Token::CloseBrace);
-		Box::new(Expr::StructLit(items))
+		Rc::new(Expr::StructLit(items))
 	}
 
-	fn expression_base(&mut self) -> Option<Box<Expr>> {
+	fn expression_base(&mut self) -> Option<Rc<Expr>> {
 		// Try to parse an identifier or a path
 		let expr = if self.peek_find(Token::any_ident()) {
 			Expr::Ident(self.take().into())
@@ -1093,10 +1095,10 @@ impl Parser {
 		} else {
 			return None;
 		};
-		Some(Box::new(expr))
+		Some(Rc::new(expr))
 	}
 
-	fn expr_bp(&mut self, min_bp: u8) -> Option<Box<Expr>> {
+	fn expr_bp(&mut self, min_bp: u8) -> Option<Rc<Expr>> {
 		// Check to see that the next token isn't an EOF
 		let peeked = self.peek_one()?.clone();
 		// Try to parse a prefix operator
@@ -1201,7 +1203,7 @@ impl Parser {
 		Some(lhs)
 	}
 
-	fn parse_expr(&mut self) -> Option<Box<Expr>> {
+	fn parse_expr(&mut self) -> Option<Rc<Expr>> {
 		self.expr_bp(0)
 	}
 }
